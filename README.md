@@ -111,13 +111,37 @@ The application uses `config.yaml` for settings. Below is a breakdown of the ava
 
 ### UV-5R Specific Instructions
 
-1. **VOX Setting on the UV-5R**  
-   - A recommended starting point for the UV-5R is a VOX value of 2. (Remember, this might vary, so further adjustment may be needed.)
+When developing this system, I tested it on a pair of Baofeng UV-5R's. Below are some configurations that may serve as a good starting point if you wish to use a similar setup.
 
-2. **Disabling RX on the UV-5R**  
-   - If possible, cut off the receive functionality on the output radio.  
-   - On the UV-5R, this can be achieved using CHIRP by setting all squelch values to 123.  
-   - This step prevents accidental transmissions and interference that could potentially jam the repeater.
+1. **VOX Setting on the Repeater Output**  
+   A recommended starting point for the UV-5R is a VOX value of `2`. (Remember, this might vary, so further adjustment may be needed.)
+
+2. **Disabling RX on the Repeater Output**  
+   If possible, cut off the receive functionality on the output radio.  
+   On the UV-5R, this can be achieved using CHIRP by setting all squelch values to `123` in Service Settings.
+
+3. **Disable Tx on the Repeater Input**  
+   This can be achieved by programming in CHIRP.  
+   Disabling RX/Tx on the opposing sides of the repeater helps prevent unintentional interference, feedback loops, and ensures that neither side is busy when it needs to be used by the repeater system. It's not necessary, but it is a really helpful safeguard.
+
+4. **Squelch**  
+   Set your squelch on your repeater input according to your use case.  
+   For example, a crossband repeater used in close proximity could use high squelch values, whereas one meant to serve a greater radius will need lower values. Use the minimum value necessary to stop interference but still allow wanted transmissions through.
+
+5. **Timeout Timer (TOT)**  
+   Mine is set to `180` seconds.  
+   Keep in mind that the output radio will heat up the more use you get from the repeater. Don’t use a radio you care about deeply for this—consider strapping a fan to it if you're worried. The timeout timer will help.  
+   However, I need to further develop features to ensure that it's not too easy to circumvent the TOT, such as adding a cool-off time in the software and a beep that alerts people when someone has timed out the machine. These features will be added soon.
+
+6. **Settings to Avoid**  
+   - **Battery Save (SAVE):** Keep it turned off, as this setting will cause parts of a transmission to be cut off in the beginning. Ideally, you will use a battery eliminator pack, as this drains a battery quickly.
+   - **Dual Watch (TDR):** Keep this off.
+   - **Busy Channel Lockout (BCL):** Keep this off.
+   - **PTT-ID & ROGER:** Turn these off. They are annoying, and the repeater already has a confirmation tone.
+
+7. **Squelch Tail Parameters**  
+   I have **STE** and **RP-STE** turned on. I haven't experimented without them, but this setup seems to prevent the machine from entering a feedback loop.
+
 
 ### Software Setup
 
@@ -155,4 +179,4 @@ This project is licensed under the GNU General Public License (v3). See `LICENSE
 ## Contact
 
 📧 **Email:** [matthew@americansquid.com](mailto:matthew@americansquid.com)  
-🐙 **GitHub:** [American Squid](https://github.com/americansquid)
+🐙 **Stay Connected:** [LinkStack](https://squidconnect.americansquid.com/@americansquid)
