@@ -1,6 +1,6 @@
 # KrakenRelay - Open Source Repeater Controller
 
-**KrakenRelay** by K3AYV is an open-source repeater controller built with Python and PyQt5, designed for crossbanding and small repeater systems. It is optimized for setups that use VOX rather than CAT control for keying, with features like audio processing, squelch control, CTCSS tone detection, and Morse code ID transmission.
+**KrakenRelay** is an open-source repeater controller built with Python and PyQt5, created by K3AYV, and designed for crossbanding and small repeater systems. It is optimized for setups that use VOX rather than CAT control for keying, with features like audio processing, squelch control, CTCSS tone detection, and Morse code ID transmission.
 
 This project is inspired by [**SvxLink**](https://github.com/sm0svx/svxlink) (by **SM0SVX**) and provides a simplified, user-friendly interface for basic repeater or crossband operations. While SvxLink excels with advanced features like EchoLink, this project focuses on offering a more streamlined solution, removing unnecessary options for these specific applications. It’s designed to avoid the need for command-line configuration, making setup easier and more accessible. This project is not intended to replace SvxLink but rather to provide an alternative for users seeking a simpler, more focused implementation.
 
