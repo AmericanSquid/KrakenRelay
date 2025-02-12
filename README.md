@@ -87,6 +87,8 @@ The application uses `config.yaml` for settings. Below is a breakdown of the ava
 | **pl\_tone\_freq**          | CTCSS tone frequency (Hz). Default: `141.3`                                          |
 | **tail\_time**              | Time before transmission ends after the last detected signal (seconds). Default: `2` |
 
+**IMPORTANT NOTE:** Several parameters in the config file are not configurable via the GUI. These settings have been optimized to work well with most systems. Modifying them could introduce latency or cause PL detection to malfunction. In most cases, issues you encounter will likely be related to your devices, timing, or audio levels. Avoid adjusting these settings unless you're absolutely certain of what you're doing, as they are hidden from the UI for a reason. Changing them won't result in a fatal error, but it could lead to unnecessary complications.
+
 ---
 
 ## Usage Guide
