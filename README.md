@@ -85,7 +85,7 @@ The application uses `config.yaml` for settings. Below is a breakdown of the ava
 | **cw\_wpm**                 | Speed of CW ID in words per minute. Default: `20`                                    |
 | **pl\_threshold**           | Threshold for CTCSS tone detection. Default: `0.1`                                   |
 | **pl\_tone\_freq**          | CTCSS tone frequency (Hz). Default: `141.3`                                          |
-| **tail\_time**              | Time before transmission ends after the last detected signal (seconds). Default: `3` |
+| **tail\_time**              | Time before transmission ends after the last detected signal (seconds). Default: `2` |
 
 ---
 
