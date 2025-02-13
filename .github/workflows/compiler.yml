@@ -12,12 +12,23 @@ jobs:
     strategy:
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
-      fail-fast: false  # This prevents other jobs from canceling when one fails
+      fail-fast: false
     runs-on: ${{ matrix.os }}
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y portaudio19-dev python3-pyaudio
+
+      - name: Install macOS dependencies
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install portaudio
 
       - name: Set up Python
         uses: actions/setup-python@v5
