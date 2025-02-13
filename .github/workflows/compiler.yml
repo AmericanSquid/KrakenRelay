@@ -23,12 +23,13 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y portaudio19-dev python3-pyaudio
+          sudo apt-get install -y portaudio19-dev python3-pyaudio python3-qt5
 
       - name: Install macOS dependencies
         if: matrix.os == 'macos-latest'
         run: |
           brew install portaudio
+          brew install pyqt@5
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -41,16 +42,22 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller==6.7
+          pip install pyqtgraph --no-deps
 
       - name: Build Windows executable
         if: matrix.os == 'windows-latest'
         run: |
-          pyinstaller --onefile --noconsole --icon=krakenrelay.ico --name KrakenRelay main.py
+          pyinstaller --onefile --noconsole --icon=krakenrelay.ico --name KrakenRelay main.py --exclude-module pyqtgraph.examples
 
-      - name: Build Unix executable
-        if: matrix.os != 'windows-latest'
+      - name: Build Unix executable (Linux)
+        if: matrix.os == 'ubuntu-latest'
         run: |
-          pyinstaller KrakenRelay.spec
+          pyinstaller KrakenRelay.spec --exclude-module pyqtgraph.examples
+
+      - name: Build Unix executable (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          pyinstaller KrakenRelay.spec --exclude-module pyqtgraph.examples --codesign-identity=- --osx-entitlements-file=None
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
