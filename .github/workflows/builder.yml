@@ -3,9 +3,9 @@ name: Build Executables
 on:
   push:
     tags:
-      - 'v*'          # Trigger on tags starting with "v"
+      - 'v*'
   release:
-    types: [published]  # Trigger when a release is published
+    types: [published]
 
 jobs:
   build:
@@ -13,42 +13,42 @@ jobs:
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.9'  # Adjust as needed
+          python-version: '3.9'
+          cache: 'pip'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install pyinstaller==6.7
 
-      # For Windows builds, use the Python Executable Builder Action
-      - name: Build Windows executable using Python2Exe Action
+      - name: Build Windows executable
         if: matrix.os == 'windows-latest'
-        uses: kentsx/Python2Exe@v1.1.1
-        with:
-          main: main                # your main Python file (main.py)
-          python_version: 3.9         # adjust if needed
-          pyinstaller_version: 6.7    # adjust if needed
-          exe_name: KrakenRelay       # output exe name
-          icon: krakenrelay.ico        # path to your icon file
-          artifact: true              # upload the built exe as an artifact
-          no-console: true            # hide the console (if desired)
+        run: |
+          pyinstaller --onefile --noconsole --icon=krakenrelay.ico --name KrakenRelay main.py
 
-      # For macOS and Ubuntu builds, use PyInstaller directly
-      - name: Build executable with PyInstaller
+      - name: Build Unix executable
         if: matrix.os != 'windows-latest'
         run: |
-          pip install pyinstaller==6.7
-          pyinstaller --onefile KrakenRelay.spec
+          pyinstaller KrakenRelay.spec
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
-          name: executable-${{ matrix.os }}
+          name: KrakenRelay-${{ matrix.os }}
           path: dist/
+          retention-days: 5
+
+      - name: Upload to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*
