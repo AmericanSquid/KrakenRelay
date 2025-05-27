@@ -6,6 +6,8 @@ class ConfigManager:
     def __init__(self, config_path='config.yaml'):
         self.config_path = config_path
         self.config = self.load_config()
+        if self.config is None:
+            self.config = self.get_default_config()
         
     def load_config(self):
         try:
@@ -39,7 +41,7 @@ class ConfigManager:
                 'noise_gate_threshold': 500
             },
             'repeater': {
-                'pl_tone_freq': 141.3,
+                'pl_tone_freq': 162.2,
                 'pl_threshold': 0.1,
                 'tail_time': 3.0,
                 'anti_kerchunk_time': 1.0,
@@ -47,10 +49,18 @@ class ConfigManager:
                 'courtesy_tone_enabled': True,
                 'cw_wpm': 20,
                 'cw_pitch': 800,
-                'callsign': 'WRZV755'
+                'callsign': 'K3AYV'
             },
             'identification': {
                 'interval_minutes': 10,
                 'cw_enabled': True
+            },
+            'tot': {
+                'tot_enabled': True,
+                'tot_time': 180,
+                'tot_lockout_enabled': True,
+                'tot_lockout_time': 5,
+                'tot_tone_freq': 1200
             }
+            
         }

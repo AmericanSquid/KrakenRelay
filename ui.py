@@ -332,6 +332,52 @@ class RepeaterUI(QMainWindow):
         id_group.setLayout(id_layout)
         settings_layout.addWidget(id_group)
 
+        # TOT settings
+        tot_group = QGroupBox("Timeout Timer (TOT)")
+        tot_layout = QVBoxLayout()
+        
+        # Enable/Disable TOT
+        self.tot_enabled = QCheckBox("Enable TOT")
+        self.tot_enabled.setChecked(self.config.config['tot']['tot_enabled'])
+        tot_layout.addWidget(self.tot_enabled)
+
+        # TOT Duration
+        tot_time_layout = QHBoxLayout()
+        tot_time_layout.addWidget(QLabel("Duration (s):"))
+        self.tot_time = QDoubleSpinBox()
+        self.tot_time.setRange(1, 600)
+        self.tot_time.setSuffix(" s")
+        self.tot_time.setValue(self.config.config['tot']['tot_time'])
+        tot_time_layout.addWidget(self.tot_time)
+        tot_layout.addLayout(tot_time_layout)
+
+        # TOT Tone Pitch
+        tot_freq_layout = QHBoxLayout()
+        tot_freq_layout.addWidget(QLabel("TOT Tone Pitch (Hz):"))
+        self.tot_tone_freq = QSpinBox()
+        self.tot_tone_freq.setRange(300, 2000)
+        self.tot_tone_freq.setValue(self.config.config['tot']['tot_tone_freq'])
+        tot_freq_layout.addWidget(self.tot_tone_freq)
+        tot_layout.addLayout(tot_freq_layout)
+
+        # Lockout after TOT
+        self.tot_lockout = QCheckBox("Enable Lockout")
+        self.tot_lockout.setChecked(self.config.config['tot']['tot_lockout_enabled'])
+        tot_layout.addWidget(self.tot_lockout)
+
+        # Lockout Duration
+        lockout_time_layout = QHBoxLayout()
+        lockout_time_layout.addWidget(QLabel("Lockout (s):"))
+        self.tot_lockout_time = QDoubleSpinBox()
+        self.tot_lockout_time.setRange(0, 300)
+        self.tot_lockout_time.setSuffix(" s")
+        self.tot_lockout_time.setValue(self.config.config['tot']['tot_lockout_time'])
+        lockout_time_layout.addWidget(self.tot_lockout_time)
+        tot_layout.addLayout(lockout_time_layout)
+
+        tot_group.setLayout(tot_layout)
+        settings_layout.addWidget(tot_group)
+
         # Connect all settings signals
         self.pl_combo.currentTextChanged.connect(self.update_pl_tone)
         self.courtesy_enabled.stateChanged.connect(self.update_courtesy_tone)
@@ -340,6 +386,11 @@ class RepeaterUI(QMainWindow):
         self.cw_enabled.stateChanged.connect(self.update_cw_enabled)
         self.cw_speed.valueChanged.connect(self.update_cw_speed)
         self.cw_pitch.valueChanged.connect(self.update_cw_pitch)
+        self.tot_enabled.stateChanged.connect(self.update_tot_enabled)
+        self.tot_time.valueChanged.connect(self.update_tot_time)
+        self.tot_lockout.stateChanged.connect(self.update_tot_lockout)
+        self.tot_lockout_time.valueChanged.connect(self.update_tot_lockout_time)
+        self.tot_tone_freq.valueChanged.connect(self.update_tot_tone_freq)
 
         self.tabs.addTab(settings_tab, "Settings")
     def add_precise_control(self, layout, label, config_path, min_val, max_val, step):
@@ -459,6 +510,26 @@ class RepeaterUI(QMainWindow):
         
     def debug_audio(self):
         self.audio_manager.verify_audio_chain()
+
+    def update_tot_enabled(self, state):
+        self.config.config['tot']['tot_enabled'] = bool(state)
+        self.config.save_config()
+    
+    def update_tot_time(self, value):
+        self.config.config['tot']['tot_time'] = value
+        self.config.save_config()
+
+    def update_tot_tone_freq (self, value):
+        self.config.config['tot']['tot_tone_freq'] = value
+        self.config.save_config()
+
+    def update_tot_lockout(self, state):
+        self.config.config['tot']['tot_lockout_enabled'] = bool(state)
+        self.config.save_config()
+
+    def update_tot_lockout_time(self, value):
+        self.config.config['tot']['tot_lockout_time'] = value
+        self.config.save_config()
         
     def start_repeater(self):
         from repeater_core import RepeaterController

@@ -16,6 +16,8 @@ def main():
     app = QApplication(sys.argv)
     
     config = ConfigManager()
+    if not config.config:
+        logging.warning("Config failed to load. Falling back to default config.")
     audio_manager = AudioDeviceManager()
     
     ui = RepeaterUI(config, audio_manager)
