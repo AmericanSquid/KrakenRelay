@@ -52,6 +52,8 @@ class RepeaterController:
             frequency=config.config['repeater']['cw_pitch'],
             sample_rate=config.config['audio']['sample_rate']
         )
+        # Pregenerate CW audio once using the callsign
+        self.cw_audio = self.morse.generate(self.config.config['repeater']['callsign'])
         
         #Generate Tones & Setup Streams
         self.generate_courtesy_tone()
@@ -116,8 +118,19 @@ class RepeaterController:
         while self.running:
             try:
                 self.process_audio()
-                if time.time() - self.last_id_time > self.config.config['identification']['interval_minutes'] * 60:
-                    self.send_id()
+                #if time.time() - self.last_id_time > self.config.config['identification']['interval_minutes'] * 60:
+                #    self.send_id()
+                            # If CW ID is enabled and repeater is idle
+                if self.config.config['identification']['cw_enabled']:
+                    interval = self.config.config['identification']['interval_minutes'] * 60
+                    if not self.transmitting and time.time() - self.last_id_time > interval:
+                        logging.info("Sending CW ID while idle")
+                        self.start_transmission()
+                        time.sleep(0.2)
+                        self.play_audio_chunks(self.cw_audio)
+                        time.sleep(0.2)
+                        self.transmitting = False
+                        self.last_id_time = time.time()
             except Exception as e:
                 logging.error(f"Error in audio loop: {e}")
 
@@ -317,6 +330,19 @@ class RepeaterController:
         self.tot_timer = 0
         self.last_transmission = time.time()
         logging.info("Transmission stopped with fade-out")
+
+        # Check if it’s time to ID
+        if self.config.config['identification']['cw_enabled']:
+            interval = self.config.config['identification']['interval_minutes'] * 60
+            if time.time() - self.last_id_time > interval:
+                logging.info("Sending CW ID after user transmission")
+                self.start_transmission()
+                time.sleep(0.2)
+                self.play_audio_chunks(self.cw_audio)
+                time.sleep(0.2)
+                self.transmitting = False
+                self.last_id_time = time.time()
+                logging.info("CW ID complete")
 
     def play_audio_chunks(self, audio):
         chunk_size = self.config.config['audio']['chunk_size']
