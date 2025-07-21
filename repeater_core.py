@@ -130,7 +130,10 @@ class RepeaterController:
                         self.play_audio_chunks(self.cw_audio)
                         time.sleep(0.2)
                         self.transmitting = False
+                        self.transmission_start_time = None
+                        self.tot_timer = 0
                         self.last_id_time = time.time()
+                        logging.info("CW ID complete — unkeyed")
             except Exception as e:
                 logging.error(f"Error in audio loop: {e}")
 
@@ -228,7 +231,7 @@ class RepeaterController:
         self.last_audio_time = time.time()
     
     #----------------#
-    # Tone Fucntions #
+    # Tone Functions #
     #----------------#
     def send_id(self):
         try:
@@ -341,6 +344,8 @@ class RepeaterController:
                 self.play_audio_chunks(self.cw_audio)
                 time.sleep(0.2)
                 self.transmitting = False
+                self.transmission_start_time = None
+                self.tot_timer = 0
                 self.last_id_time = time.time()
                 logging.info("CW ID complete")
 
