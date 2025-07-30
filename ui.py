@@ -1,10 +1,11 @@
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                            QLabel, QPushButton, QComboBox, QSlider, QGroupBox,
                            QCheckBox, QTabWidget, QProgressBar, QLineEdit, QSpinBox,
-                           QDoubleSpinBox)
+                           QDoubleSpinBox, QSizePolicy)
 from PyQt5.QtCore import Qt, QTimer
 import numpy as np
 from dialogs.mumble import MumbleDialog
+from dialogs.ptt import PTTDialog
 
 class RepeaterUI(QMainWindow):
     def __init__(self, config, audio_manager):
@@ -409,12 +410,19 @@ class RepeaterUI(QMainWindow):
         tot_group.setLayout(tot_layout)
         settings_layout.addWidget(tot_group)
 
-        # ------------------------------------------------------------
-        # NEW: one-click button to open the Mumble settings dialog
-        # ------------------------------------------------------------
+        btn_row = QHBoxLayout()
+
         mumble_btn = QPushButton("Mumble Settings")
         mumble_btn.clicked.connect(self.open_mumble_settings)
-        settings_layout.addWidget(mumble_btn)
+        mumble_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        btn_row.addWidget(mumble_btn)
+
+        ptt_btn = QPushButton("PTT Settings")
+        ptt_btn.clicked.connect(self.open_ptt_settings)
+        ptt_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        btn_row.addWidget(ptt_btn)
+
+        settings_layout.addLayout(btn_row)
 
         # Connect all settings signals
         self.pl_combo.currentTextChanged.connect(self.update_pl_tone)
@@ -440,6 +448,15 @@ class RepeaterUI(QMainWindow):
             self.config.save_config()                      # write YAML
         if self.controller is not None:
             self.controller.reload_mumble_link()
+
+    def open_ptt_settings(self):
+        cfg = self.config.config['ptt']  # existing dictionary from config
+        dlg = PTTDialog(cfg, self)
+        if dlg.exec_():
+            self.config.config['ptt'] = dlg.result_config()
+            self.config.save_config()
+#            if self.controller:
+#                self.controller.reload_ptt_config()
 
     def add_precise_control(self, layout, label, config_path, min_val, max_val, step):
         control_layout = QHBoxLayout()
