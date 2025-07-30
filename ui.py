@@ -4,6 +4,7 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                            QDoubleSpinBox)
 from PyQt5.QtCore import Qt, QTimer
 import numpy as np
+from dialogs.mumble import MumbleDialog
 
 class RepeaterUI(QMainWindow):
     def __init__(self, config, audio_manager):
@@ -22,65 +23,80 @@ class RepeaterUI(QMainWindow):
         
         # Apply dark theme
         self.setStyleSheet("""
-            QMainWindow, QWidget {
-                background-color: #2b2b2b;
-                color: #ffffff;
-            }
-            QGroupBox {
-                border: 1px solid #404040;
-                border-radius: 5px;
-                margin-top: 1em;
-                padding-top: 0.5em;
-            }
-            QGroupBox::title {
-                color: #00ff00;
-            }
-            QPushButton {
-                background-color: #404040;
-                border: 1px solid #505050;
-                border-radius: 3px;
-                padding: 5px;
-                color: white;
-            }
-            QPushButton:hover {
-                background-color: #505050;
-            }
-            QPushButton:pressed {
-                background-color: #353535;
-            }
-            QComboBox, QLineEdit, QSpinBox, QDoubleSpinBox {
-                background-color: #353535;
-                border: 1px solid #505050;
-                border-radius: 3px;
-                padding: 2px;
-                color: white;
-            }
-            QSlider::handle {
-                background-color: #00ff00;
-	        border-radius: 4px;
-	        width: 16px;
-	        height: 16px;
-	        margin: -6px 0;
-            }
-            QSlider::groove:horizontal {
-                background-color: #404040;
-        	height: 8px;
-	        border-radius: 4px;
-            }
-            QTabWidget::pane {
-                border: 1px solid #404040;
-            }
-            QTabBar::tab {
-                background-color: #353535;
-                color: white;
-                padding: 8px;
-            }
-            QTabBar::tab:selected {
-                background-color: #404040;
-                border-bottom: 2px solid #00ff00;
-            }
+        QMainWindow, QWidget {
+            background-color: #23272e;
+            color: #ffffff;
+            font-family: "Inter", "Segoe UI", "Roboto", sans-serif;
+        }
+        QGroupBox {
+            border: 1px solid #29243c;
+            border-radius: 8px;
+            margin-top: 1em;
+            padding-top: 0.5em;
+        }
+        QGroupBox::title {
+            color: #a259ff;
+            font-weight: 600;
+        }
+        QPushButton {
+            background-color: #29243c;
+            border: 1.5px solid #37fff8;
+            border-radius: 5px;
+            color: #ffffff;
+            padding: 8px;
+            font-weight: 500;
+        }
+        QPushButton:hover {
+            background-color: #20222b;
+            border: 1.5px solid #37fff8;
+        }
+        QPushButton:pressed {
+            background-color: #20222b;
+            border: 1.5px solid #a259ff;
+        }
+        QComboBox, QLineEdit, QSpinBox, QDoubleSpinBox {
+            background-color: #29243c;
+            border: 1px solid #29243c;
+            border-radius: 3px;
+            color: #ffffff;
+            padding: 4px;
+        }
+        QSlider::handle {
+            background-color: #a259ff;
+            border-radius: 3px;
+            width: 18px;
+            height: 18px;
+            margin: -8px 0;
+        }
+        QSlider::groove:horizontal {
+            background-color: #29243c;
+            height: 6px;
+            border-radius: 4px;
+        }
+        QTabWidget::pane {
+            border: 1.5px solid #29243c;
+            border-radius: 8px;
+        }
+        QTabBar::tab {
+            background-color: #29243c;
+            color: #b0b4ba;
+            padding: 8px 18px;
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+            margin-right: 3px;
+            font-weight: 500;
+        }
+        QTabBar::tab:selected {
+            background-color: #22182c;
+            color: #ffffff;
+            border-bottom: 3px solid #a259ff;
+        }
+        QTabBar::tab:hover {
+            background-color: #29243c;
+            color: #ff71ce;
+        }
         """)
-        
+
         # Main widget and layout
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
@@ -176,6 +192,14 @@ class RepeaterUI(QMainWindow):
         
         # Audio Meter
         self.setup_audio_meter(main_layout)
+
+        # Mumble LED
+        self.mumble_led = QLabel("⚪ Mumble")   # instead of QtWidgets.QLabel
+        self.statusBar().addPermanentWidget(self.mumble_led)
+
+        timer = QTimer(self, interval=1000)
+        timer.timeout.connect(self._update_mumble_led)
+        timer.start()
         
         self.tabs.addTab(main_tab, "Main")
         
@@ -222,6 +246,7 @@ class RepeaterUI(QMainWindow):
         self.highpass_cutoff.valueChanged.connect(self.update_highpass_cutoff)
         self.noise_gate_enabled.stateChanged.connect(self.update_noise_gate)
         self.noise_gate_threshold.valueChanged.connect(self.update_noise_gate_threshold)
+
     def setup_audio_meter(self, main_layout):
         meter_group = QGroupBox("Audio Level")
         meter_layout = QVBoxLayout()
@@ -251,6 +276,12 @@ class RepeaterUI(QMainWindow):
         
         meter_group.setLayout(meter_layout)
         main_layout.addWidget(meter_group)
+
+    def _update_mumble_led(self):
+        if self.controller and self.controller.mumble:
+            self.mumble_led.setText("🟢 Mumble Online")
+        else:
+            self.mumble_led.setText("⚪ Mumble Offline")
 
     def setup_settings_tab(self):
         settings_tab = QWidget()
@@ -331,7 +362,7 @@ class RepeaterUI(QMainWindow):
 
         id_group.setLayout(id_layout)
         settings_layout.addWidget(id_group)
-
+       
         # TOT settings
         tot_group = QGroupBox("Timeout Timer (TOT)")
         tot_layout = QVBoxLayout()
@@ -378,6 +409,13 @@ class RepeaterUI(QMainWindow):
         tot_group.setLayout(tot_layout)
         settings_layout.addWidget(tot_group)
 
+        # ------------------------------------------------------------
+        # NEW: one-click button to open the Mumble settings dialog
+        # ------------------------------------------------------------
+        mumble_btn = QPushButton("Mumble Settings")
+        mumble_btn.clicked.connect(self.open_mumble_settings)
+        settings_layout.addWidget(mumble_btn)
+
         # Connect all settings signals
         self.pl_combo.currentTextChanged.connect(self.update_pl_tone)
         self.courtesy_enabled.stateChanged.connect(self.update_courtesy_tone)
@@ -393,6 +431,16 @@ class RepeaterUI(QMainWindow):
         self.tot_tone_freq.valueChanged.connect(self.update_tot_tone_freq)
 
         self.tabs.addTab(settings_tab, "Settings")
+
+    def open_mumble_settings(self):
+        cfg = self.config.config['mumble']          # live dict from ConfigManager
+        dlg = MumbleDialog(cfg, self)               # modal; class in step 2
+        if dlg.exec_():                             # OK pressed
+            self.config.config['mumble'] = dlg.result_config()
+            self.config.save_config()                      # write YAML
+        if self.controller is not None:
+            self.controller.reload_mumble_link()
+
     def add_precise_control(self, layout, label, config_path, min_val, max_val, step):
         control_layout = QHBoxLayout()
         control_layout.addWidget(QLabel(label))
