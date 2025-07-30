@@ -5,6 +5,8 @@ import logging
 from scipy import signal
 from morse_code import MorseCode
 from audio_manager import ToneDetector, AudioBuffer
+from mumble_interface import MumbleLink
+from ptt_controller import CM108PTT
 
 class RepeaterController:
 
@@ -17,6 +19,20 @@ class RepeaterController:
         self.audio_manager = audio_manager
         self.input_device = input_device
         self.output_device = output_device
+
+        # PTT Setup
+        ptt_cfg = config.config.get('ptt', {})
+        self.ptt_mode = ptt_cfg.get('mode', 'VOX').upper()
+
+        if self.ptt_mode == 'CM108':
+            self.ptt = CM108PTT(
+                device=ptt_cfg.get('device_path', '/dev/hidraw0'),
+                pin=int(ptt_cfg.get('gpio_pin', 3))
+            )
+            logging.info(f"PTT mode set to CM108 (device={self.ptt.device}, pin={self.ptt.pin})")
+        else:
+            self.ptt = None
+            logging.info("PTT mode set to VOX (no GPIO control)")
 
         # Audio Stream Set Up
         self.input_stream = None
@@ -32,6 +48,7 @@ class RepeaterController:
         self.last_transmission = time.time()
         self.last_id_time = time.time()
         self.current_rms = 0
+        self.mumble: MumbleLink | None = None
         
         # Initialize audio buffers
         self.input_buffer = AudioBuffer()
@@ -59,6 +76,7 @@ class RepeaterController:
         self.generate_courtesy_tone()
         self.generate_tot_tone()
         self.setup_audio_streams()
+        self._init_mumble_link()
         logging.info("RepeaterController initialized")
 
     def setup_audio_streams(self):
@@ -86,6 +104,25 @@ class RepeaterController:
         except Exception as e:
             logging.error(f"Failed to setup audio streams: {e}")
             raise
+   
+    # ---------- Mumble plumbing ----------
+    def _init_mumble_link(self):
+        cfg = self.config.config['mumble']
+        if not cfg.get('enabled', False):
+            self.mumble = None
+            return
+        try:
+            self.mumble = MumbleLink(cfg)
+            logging.info("Mumble link initialised (mode=%s)", cfg['mode'])
+        except Exception as exc:
+            self.mumble = None
+            logging.error("Could not start Mumble link: %s", exc, exc_info=True)
+
+    def reload_mumble_link(self):
+        """Call this from the Settings dialog after the user presses Save."""
+        if self.mumble:
+            self.mumble.disconnect()
+        self._init_mumble_link()
 
     #---------------#
     # Audio Filters #
@@ -131,14 +168,30 @@ class RepeaterController:
                         time.sleep(0.2)
                         self.transmitting = False
                         self.transmission_start_time = None
+
+                        fade_duration = 0.1
+                        sample_rate = self.config.config['audio']['sample_rate']
+                        chunk_size = self.config.config['audio']['chunk_size']
+                        num_fade_chunks = int((fade_duration * sample_rate) // chunk_size)
+        
+                        for i in range(num_fade_chunks):
+                          silent_chunk = (np.zeros(chunk_size)).astype(np.int16).tobytes()
+                          self.output_stream.write(silent_chunk)
+                          time.sleep(chunk_size / sample_rate)
+        
+                        self.transmitting = False
                         self.tot_timer = 0
+                        self.last_transmission = time.time()
+                        self.ptt.unkey() 
+
                         self.last_id_time = time.time()
-                        logging.info("CW ID complete — unkeyed")
+                        logging.info("Idle ID complete. Transmitter unkeyed.")
+
             except Exception as e:
                 logging.error(f"Error in audio loop: {e}")
 
     def cleanup(self):
-        logging.info("Cleaning up repeater controler...")
+        logging.info("Cleaning up repeater controller...")
         self.running = False # Stop the loop
 
         if hasattr(self, 'audio_thread'):
@@ -149,7 +202,7 @@ class RepeaterController:
                 self.input_stream.stop_stream()
                 self.input_stream.close()
             except Exception as e:
-                logging.error(f"Error closign input stream: {e}")
+                logging.error(f"Error closing input stream: {e}")
 
         if self.output_stream:
             try:
@@ -158,7 +211,7 @@ class RepeaterController:
             except Exception as e:
                 logging.error(f"Error closing output stream: {e}")
 
-        logging.info("Repeater controller stopepd and cleaned up")
+        logging.info("Repeater controller stopped and cleaned up")
 
     #-----------------------#
     # Core Audio Processing #
@@ -179,6 +232,15 @@ class RepeaterController:
         data = self.input_stream.read(self.config.config['audio']['chunk_size'], exception_on_overflow=False)
         samples = np.frombuffer(data, dtype=np.int16).astype(np.float32)
         self.current_rms = self.calculate_db_level(samples)
+
+        m_cfg = self.config.config['mumble']
+        m_frame = None  # ← FIX: always define first!
+
+        if self.mumble and m_cfg.get('direction') != 'rf_to_mumble':
+            m_frame = self.mumble.read_frame()
+        if m_frame is not None:
+            self.handle_transmission(m_frame.astype(np.float32))
+            self.output_stream.write(m_frame.astype(np.int16).tobytes())
         
         # Check squelch first
         if self.check_squelch(samples):
@@ -195,13 +257,14 @@ class RepeaterController:
             # Check for PL tone
             if self.tone_detector.detect_tone(samples):
                 if not self.transmitting:
-                    logging.info("141.3 Hz PL Tone Detected") # Make dynamic!!
+                    freq = self.config.config['repeater']['pl_tone_freq']   # pull from YAML
+                    logging.info(f"{freq} Hz PL tone detected")
                 self.handle_transmission(samples)
         else:
             self.current_rms = 0
             if self.transmitting and (time.time() - self.last_audio_time) > self.config.config['repeater']['tail_time']:
                 logging.info("Silence persists beyond tail time. Stopping transmission.")
-                self.stop_transmission()
+                self.stop_transmission()            
 
     def handle_transmission(self, samples):
         if self.config.config['tot']['tot_enabled'] and self.transmission_start_time:
@@ -222,14 +285,30 @@ class RepeaterController:
 
         if not self.transmitting:
             self.start_transmission()
-        
+
         # Apply output gain
         output_samples = samples * 10 ** (self.config.config['audio']['output_gain'] / 20)
-        output_data = output_samples.astype(np.int16).tobytes()
-        self.output_stream.write(output_data)
+        self._send_pcm(output_samples.astype(np.int16))
         
         self.last_audio_time = time.time()
-    
+
+    # ---------- unified TX funnel ----------   ← paste helper here
+    def _send_pcm(self, pcm: np.ndarray):
+        """
+        Forward audio to the RF transmitter, and—unless the user picked
+        'mumble_to_rf' (RX-only)—also pipe it to Mumble.
+        """
+        # Fix any NaNs/infs
+        if np.isnan(pcm).any() or np.isinf(pcm).any():
+            logging.warning("NaN/Inf in audio! Zeroing bad samples.")
+            pcm = np.nan_to_num(pcm, nan=0.0, posinf=0.0, neginf=0.0)
+        # Clip to int16 range
+        pcm = np.clip(pcm, -32768, 32767).astype(np.int16)
+        cfg = self.config.config['mumble']
+        if self.mumble and cfg.get('direction') != 'mumble_to_rf':
+            self.mumble.write_frame(pcm)
+        self.output_stream.write(pcm.tobytes())
+
     #----------------#
     # Tone Functions #
     #----------------#
@@ -251,27 +330,23 @@ class RepeaterController:
 
     def generate_courtesy_tone(self):
         sample_rate = self.config.config['audio']['sample_rate']
-        duration = 0.1
-        t = np.linspace(0, duration, int(sample_rate * duration))
-        
-        tone1 = np.sin(2 * np.pi * 800 * t)
-        tone2 = np.sin(2 * np.pi * 400 * t)
-        
-        gap = np.zeros(int(sample_rate * 0.05))
-        
-        self.courtesy_tone = np.concatenate([tone1, gap, tone2])
-        
+        duration = 0.15  # a little longer for clarity
+        frequency = 700
+
+        t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
+        tone = np.sin(2 * np.pi * frequency * t)
+
         fade_len = int(sample_rate * 0.01)
         fade = np.linspace(0, 1, fade_len)
-        self.courtesy_tone[:fade_len] *= fade
-        self.courtesy_tone[-fade_len:] *= fade[::-1]
-        
-        self.courtesy_tone = (self.courtesy_tone * 32767).astype(np.int16)
-        logging.info("Generated courtesy tone")
+        tone[:fade_len] *= fade
+        tone[-fade_len:] *= fade[::-1]
+
+        self.courtesy_tone = (tone * 32767).astype(np.int16)
+        logging.info(f"Generated courtesy tone at {frequency} Hz")
 
     def play_courtesy_tone(self):
         if self.config.config['repeater']['courtesy_tone_enabled']:
-            self.output_stream.write(self.courtesy_tone.tobytes())
+            self._send_pcm(self.courtesy_tone)
             logging.info("Played courtesy tone")
 
     def generate_tot_tone(self):
@@ -294,7 +369,7 @@ class RepeaterController:
 
     def play_tot_tone(self):
         if self.transmitting:
-            self.output_stream.write(self.tot_tone.tobytes())
+            self._send_pcm(self.tot_tone)
             logging.info("Played TOT warning tone") 
 
     #----------------------#
@@ -307,7 +382,12 @@ class RepeaterController:
                 self.transmitting = True
                 self.transmission_start_time = time.time() # Set start time
                 self.tot_timer = 0
+
+            if self.ptt_mode == 'CM108' and self.ptt:
+                self.ptt.key()
+            else:
                 time.sleep(self.config.config['repeater']['carrier_delay'])
+
                 logging.info("Starting transmission")
 
     def stop_transmission(self):
@@ -344,10 +424,11 @@ class RepeaterController:
                 self.play_audio_chunks(self.cw_audio)
                 time.sleep(0.2)
                 self.transmitting = False
-                self.transmission_start_time = None
-                self.tot_timer = 0
                 self.last_id_time = time.time()
                 logging.info("CW ID complete")
+
+        if self.ptt_mode == 'CM108' and self.ptt:
+            self.ptt.unkey()
 
     def play_audio_chunks(self, audio):
         chunk_size = self.config.config['audio']['chunk_size']
@@ -355,4 +436,4 @@ class RepeaterController:
             chunk = audio[i:i + chunk_size]
             if len(chunk) < chunk_size:
                 chunk = np.pad(chunk, (0, chunk_size - len(chunk)))
-            self.output_stream.write(chunk.tobytes())
+            self._send_pcm(chunk)
