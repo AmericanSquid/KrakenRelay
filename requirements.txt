@@ -1,9 +1,12 @@
-logging==0.4.9.6
 numpy==2.3.1
+opuslib==3.0.1
+protobuf==3.12.2
 PyAudio==0.2.14
+pymumble==1.6.1
 PyQt5==5.15.11
 PyQt5-Qt5==5.15.17
 PyQt5_sip==12.17.0
 pyqtgraph==0.13.7
 PyYAML==6.0.2
 scipy==1.16.0
+six==1.17.0
