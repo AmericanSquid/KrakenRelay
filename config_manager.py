@@ -49,7 +49,7 @@ class ConfigManager:
                 'courtesy_tone_enabled': True,
                 'cw_wpm': 18,
                 'cw_pitch': 700,
-                'callsign': 'N0KRKN'
+                'callsign': 'K3AYV'
             },
             'identification': {
                 'interval_minutes': 10,
@@ -69,7 +69,7 @@ class ConfigManager:
                 "host": "127.0.0.1",
                 "port": 64738,
                 "user": "KrakenRelay",
-                "password": "ShhhhItsASecret!",
+                "password": "",
                 "channel": "RepeaterLink",
             }, 
             "ptt": {

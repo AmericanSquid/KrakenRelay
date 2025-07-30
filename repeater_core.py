@@ -22,7 +22,7 @@ class RepeaterController:
 
         # PTT Setup
         ptt_cfg = config.config.get('ptt', {})
-        self.ptt_mode = ptt_cfg.get('mode', 'VOX').upper()
+        self.ptt_mode = ptt_cfg.get('mode', 'NONE').upper()
 
         if self.ptt_mode == 'CM108':
             self.ptt = CM108PTT(
@@ -146,6 +146,9 @@ class RepeaterController:
     # System Control #
     #----------------#
     def start(self):
+        if self.running:
+            logging.warning("Repeater is already running.")
+            return
         self.running = True
         self.audio_thread = threading.Thread(target=self.audio_loop)
         self.audio_thread.start()
