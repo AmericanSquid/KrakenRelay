@@ -37,18 +37,18 @@ class ConfigManager:
                 'squelch_threshold': -40,
                 'highpass_enabled': True,
                 'highpass_cutoff': 300,
-                'noise_gate_enabled': True,
+                'noise_gate_enabled': False,
                 'noise_gate_threshold': 500
             },
             'repeater': {
                 'pl_tone_freq': 162.2,
                 'pl_threshold': 0.1,
-                'tail_time': 3.0,
-                'anti_kerchunk_time': 1.0,
-                'carrier_delay': 0.25,
+                'tail_time': 2.0,
+                'anti_kerchunk_time': 0,
+                'carrier_delay': 0,
                 'courtesy_tone_enabled': True,
-                'cw_wpm': 20,
-                'cw_pitch': 800,
+                'cw_wpm': 18,
+                'cw_pitch': 700,
                 'callsign': 'K3AYV'
             },
             'identification': {
@@ -61,6 +61,20 @@ class ConfigManager:
                 'tot_lockout_enabled': True,
                 'tot_lockout_time': 5,
                 'tot_tone_freq': 1200
+            },
+            "mumble": {
+                "enabled": False,
+                "mode": "link",          # link | voter   (voter stubbed)
+                "direction": "bidirectional",     # bidirectional | rf_to_mumble | mumble_to_rf
+                "host": "127.0.0.1",
+                "port": 64738,
+                "user": "KrakenRelay",
+                "password": "",
+                "channel": "RepeaterLink",
+            }, 
+            "ptt": {
+                "mode": "CM108",
+                "device_path": "/dev/hidraw0",
+                "gpio_pin": "3",
             }
-            
         }
