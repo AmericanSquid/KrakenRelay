@@ -210,6 +210,13 @@ class RepeaterController:
                 self.output_stream.close()
             except Exception as e:
                 logging.error(f"Error closing output stream: {e}")
+        
+        if self.ptt:
+            self.ptt.unkey()
+        
+        if self.mumble:
+            self.mumble.disconnect()
+            self.mumble = None  # clear reference
 
         logging.info("Repeater controller stopped and cleaned up")
 
