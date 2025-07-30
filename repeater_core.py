@@ -154,6 +154,10 @@ class RepeaterController:
         self.audio_thread.start()
         logging.info("Repeater controller started")
 
+        logging.info(f"🧵 Active threads after start: {threading.active_count()}")
+        for t in threading.enumerate():
+            logging.info(f"  • {t.name}")
+
     def audio_loop(self):
         while self.running:
             try:
@@ -222,6 +226,10 @@ class RepeaterController:
             self.mumble = None  # clear reference
 
         logging.info("Repeater controller stopped and cleaned up")
+
+        logging.info(f"🧵 Active threads after cleanup: {threading.active_count()}")
+        for t in threading.enumerate():
+            logging.info(f"  • {t.name}")
 
     #-----------------------#
     # Core Audio Processing #

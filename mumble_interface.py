@@ -99,7 +99,7 @@ class MumbleLink:
         if hasattr(self, "_tx_thread") and self._tx_thread.is_alive():
             logging.debug("Joining MumbleTX thread...")
             self._tx_thread.join(timeout=1.0)
-            
+
         if hasattr(self, "_ping_thread") and self._ping_thread.is_alive():
             logging.debug("Joining MumblePing thread...")
             self._ping_thread.join(timeout=1.0)
@@ -124,13 +124,17 @@ class MumbleLink:
             pass
 
     def _tx_worker(self) -> None:
-        while self._m.is_alive():
-            pcm = self._tx_q.get()            # blocks until data present
+        while self._running:
             try:
-                self._m.sound_output.add_sound(pcm.tobytes())
-            except Exception as e:
-                logging.debug(f"Tx add_sound failed: {e}")
-                time.sleep(0.1)
+                pcm = self._tx_q.get(timeout=0.1)
+                try:
+                    self._m.sound_output.add_sound(pcm.tobytes())
+                except Exception as e:
+                    logging.warning(f"[MumbleTX] add_sound failed: {e}")
+                    break
+            except queue.Empty:
+                continue
+                
     def _keepalive_worker(self) -> None:
         """Send a UDP Ping every 5s so Murmur never reaps us."""
         while self._running:
