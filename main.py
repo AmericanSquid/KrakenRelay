@@ -2,13 +2,31 @@ import sys
 import time
 import argparse
 import logging
+import signal
+import threading
 from typing import Optional
 from PyQt5.QtWidgets import QApplication
+from PyQt5.QtCore import QTimer
 from config_manager import ConfigManager
 from audio_manager import AudioDeviceManager
 from repeater_core import RepeaterController
 from ui import RepeaterUI
 
+#-------------------#
+# Shutdown Handling #
+#-------------------#
+app = None
+shutdown_event = threading.Event()
+
+def signal_handler(sig, frame):
+    print("\n[KrakenRelay] Signal received — shutting down gracefully…")
+    shutdown_event.set()
+    global app
+    if app is not None:
+        app.quit()
+
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 #-----------------#
 # Logging Helpers #
 #-----------------#
@@ -125,7 +143,7 @@ def run_headless(args: argparse.Namespace) -> None:
     logging.info("Headless mode running – Ctrl+C to stop.")
 
     try:
-        while True:
+        while not shutdown_event.is_set():
             time.sleep(1)
     except KeyboardInterrupt:
         logging.info("Ctrl+C detected – shutting down…")
@@ -138,6 +156,7 @@ def run_headless(args: argparse.Namespace) -> None:
 #------------#
 
 def run_gui() -> None:
+    global app
     app = QApplication(sys.argv)
     config = ConfigManager()
     if not config.config:
@@ -145,6 +164,7 @@ def run_gui() -> None:
     audio_manager = AudioDeviceManager()
     ui = RepeaterUI(config, audio_manager)
     ui.show()
+
     sys.exit(app.exec_())
 
 #-------------#

@@ -7,6 +7,7 @@ from morse_code import MorseCode
 from audio_manager import ToneDetector, AudioBuffer
 from mumble_interface import MumbleLink
 from ptt_controller import CM108PTT
+import os
 
 class RepeaterController:
 
@@ -149,6 +150,7 @@ class RepeaterController:
         if self.running:
             logging.warning("Repeater is already running.")
             return
+            
         self.running = True
         self.audio_thread = threading.Thread(target=self.audio_loop)
         self.audio_thread.start()
@@ -162,17 +164,15 @@ class RepeaterController:
         while self.running:
             try:
                 self.process_audio()
-                #if time.time() - self.last_id_time > self.config.config['identification']['interval_minutes'] * 60:
-                #    self.send_id()
-                            # If CW ID is enabled and repeater is idle
+                # If CW ID is enabled and repeater is idle
                 if self.config.config['identification']['cw_enabled']:
                     interval = self.config.config['identification']['interval_minutes'] * 60
                     if not self.transmitting and time.time() - self.last_id_time > interval:
                         logging.info("Sending CW ID while idle")
                         self.start_transmission()
-                        time.sleep(0.2)
+                        #time.sleep(0.2)
                         self.play_audio_chunks(self.cw_audio)
-                        time.sleep(0.2)
+                        #time.sleep(0.2)
                         self.transmitting = False
                         self.transmission_start_time = None
 
@@ -182,14 +182,14 @@ class RepeaterController:
                         num_fade_chunks = int((fade_duration * sample_rate) // chunk_size)
         
                         for i in range(num_fade_chunks):
-                          silent_chunk = (np.zeros(chunk_size)).astype(np.int16).tobytes()
-                          self.output_stream.write(silent_chunk)
-                          time.sleep(chunk_size / sample_rate)
-        
+                            silent_chunk = (np.zeros(chunk_size)).astype(np.int16).tobytes()
+                            self.output_stream.write(silent_chunk)
+                            time.sleep(chunk_size / sample_rate)
+            
                         self.transmitting = False
                         self.tot_timer = 0
                         self.last_transmission = time.time()
-                        self.ptt.unkey() 
+                        self.safe_ptt_unkey()
 
                         self.last_id_time = time.time()
                         logging.info("Idle ID complete. Transmitter unkeyed.")
@@ -217,13 +217,16 @@ class RepeaterController:
                 self.output_stream.close()
             except Exception as e:
                 logging.error(f"Error closing output stream: {e}")
+
+        self.safe_ptt_unkey()
         
-        if self.ptt:
-            self.ptt.unkey()
-        
-        if self.mumble:
-            self.mumble.disconnect()
-            self.mumble = None  # clear reference
+        if hasattr(self, 'mumble'):
+            try:
+                self.mumble.disconnect()
+                self.mumble = None  # clear reference
+                logging.info("Disconnected from Mumble")
+            except Exception as e:
+                logging.error(f"Failed to disconnected Mumble: {e}")
 
         logging.info("Repeater controller stopped and cleaned up")
 
@@ -252,7 +255,20 @@ class RepeaterController:
         self.current_rms = self.calculate_db_level(samples)
 
         m_cfg = self.config.config['mumble']
-        m_frame = None  # ← FIX: always define first!
+        m_frame = None
+
+        if m_cfg.get('direction') == 'mumble_to_rf':
+            chunk  = self.config.config['audio']['chunk_size']
+            frame  = self.mumble.read_frame()
+            if frame is not None and np.any(frame):
+                # key TX if needed, reset timers
+                if not self.transmitting:
+                    self.start_transmission()          # has PTT + timers
+                self._send_pcm(frame.astype(np.int16))
+                self.last_audio_time = time.time()
+                return
+        else:
+            samples = np.zeros(chunk, dtype=np.float32)
 
         if self.mumble and m_cfg.get('direction') != 'rf_to_mumble':
             m_frame = self.mumble.read_frame()
@@ -275,19 +291,23 @@ class RepeaterController:
             # Check for PL tone
             if self.tone_detector.detect_tone(samples):
                 if not self.transmitting:
-                    freq = self.config.config['repeater']['pl_tone_freq']   # pull from YAML
+                    freq = self.config.config['repeater']['pl_tone_freq']
                     logging.info(f"{freq} Hz PL tone detected")
                 self.handle_transmission(samples)
         else:
             self.current_rms = 0
             if self.transmitting and (time.time() - self.last_audio_time) > self.config.config['repeater']['tail_time']:
                 logging.info("Silence persists beyond tail time. Stopping transmission.")
-                self.stop_transmission()            
+                self.stop_transmission()
+            else:
+                # 🚨 We're in the tail hang time — KEEP AUDIO FLOWING
+                silent_chunk = np.zeros(self.config.config['audio']['chunk_size'], dtype=np.int16)
+                self.output_stream.write(silent_chunk.tobytes())            
 
     def handle_transmission(self, samples):
         if self.config.config['tot']['tot_enabled'] and self.transmission_start_time:
             elapsed_time = time.time() - self.transmission_start_time
-            self.tot_timer = elapsed_time  # Update timer with actual elapsed time
+            self.tot_timer = elapsed_time
             
             if elapsed_time >= self.config.config['tot']['tot_time']:
                 logging.warning(f"TOT limit reached at {self.tot_timer:.1f} seconds")
@@ -335,10 +355,10 @@ class RepeaterController:
             callsign = self.config.config['repeater']['callsign']
             if self.config.config['identification']['cw_enabled']:
                 self.start_transmission()
-                time.sleep(0.2)
+                #time.sleep(0.2)
                 cw_audio = self.morse.generate(callsign)
                 self.play_audio_chunks(cw_audio)
-                time.sleep(0.2)
+                #time.sleep(0.2)
                 self.stop_transmission()
                 logging.info(f"Sent CW ID: {callsign}")
         except Exception as e:
@@ -401,31 +421,37 @@ class RepeaterController:
                 self.transmission_start_time = time.time() # Set start time
                 self.tot_timer = 0
 
-            if self.ptt_mode == 'CM108' and self.ptt:
-                self.ptt.key()
+            if self.ptt_mode == 'CM108':
+                self.safe_ptt_key()
             else:
-                time.sleep(self.config.config['repeater']['carrier_delay'])
-
+                threading.Timer(self.config.config['repeater']['carrier_delay'], lambda: logging.info("Carrier delay elapsed")).start()
                 logging.info("Starting transmission")
 
     def stop_transmission(self):
         self.transmitting = False
         self.transmission_start_time = None
 
+        # Prime ALSA before tone playback
+        self.output_stream.write(np.zeros(self.config.config['audio']['chunk_size'], dtype=np.int16).tobytes())
+
         if self.config.config['repeater']['courtesy_tone_enabled']:
-            time.sleep(0.1)
+            #time.sleep(0.1)
             self.play_courtesy_tone()
-            time.sleep(0.2)
+            #time.sleep(0.2)
         
         fade_duration = 0.1
         sample_rate = self.config.config['audio']['sample_rate']
         chunk_size = self.config.config['audio']['chunk_size']
         num_fade_chunks = int((fade_duration * sample_rate) // chunk_size)
         
+        start = time.time()
         for i in range(num_fade_chunks):
-            silent_chunk = (np.zeros(chunk_size)).astype(np.int16).tobytes()
-            self.output_stream.write(silent_chunk)
-            time.sleep(chunk_size / sample_rate)
+            self.output_stream.write(np.zeros(chunk_size, dtype=np.int16).tobytes())
+            target_time = start + (i + 1) * (chunk_size / sample_rate)
+            now = time.time()
+            delay = target_time - now
+            if delay > 0:
+                time.sleep(delay)
         
         self.transmitting = False
         self.tot_timer = 0
@@ -438,15 +464,15 @@ class RepeaterController:
             if time.time() - self.last_id_time > interval:
                 logging.info("Sending CW ID after user transmission")
                 self.start_transmission()
-                time.sleep(0.2)
+                #time.sleep(0.2)
                 self.play_audio_chunks(self.cw_audio)
-                time.sleep(0.2)
+                #time.sleep(0.2)
                 self.transmitting = False
                 self.last_id_time = time.time()
                 logging.info("CW ID complete")
 
-        if self.ptt_mode == 'CM108' and self.ptt:
-            self.ptt.unkey()
+        if self.ptt_mode == 'CM108':
+            self.safe_ptt_unkey()
 
     def play_audio_chunks(self, audio):
         chunk_size = self.config.config['audio']['chunk_size']
@@ -455,3 +481,78 @@ class RepeaterController:
             if len(chunk) < chunk_size:
                 chunk = np.pad(chunk, (0, chunk_size - len(chunk)))
             self._send_pcm(chunk)
+    
+    ################
+    # Keying Logic #
+    ################
+
+    def safe_ptt_key(self):
+        try:
+            if self.ptt and getattr(self.ptt, "working", True):
+                self.ptt.key()
+                return True
+            else:
+                logging.warning("PTT missing or dead—skipping key() or using VOX fallback.")
+                if self.ptt_mode != "VOX":
+                    self.ptt_fallback = True
+                self.ptt_mode = "VOX"
+                return False
+        except Exception as e:
+            logging.error(f"RepeaterCore: PTT key error: {e}")
+            self.ptt = None
+            if self.ptt_mode != "VOX":
+                self.ptt_fallback = True
+            self.ptt_mode = "VOX"
+            return False
+
+    def safe_ptt_unkey(self):
+        try:
+            if self.ptt and getattr(self.ptt, "working", True):
+                self.ptt.unkey()
+                return True
+            else:
+                logging.warning("PTT missing or dead—skipping unkey() or using VOX fallback.")
+                if self.ptt_mode != "VOX":
+                    self.ptt_fallback = True
+                self.ptt_mode = "VOX"
+                return False
+        except Exception as e:
+            logging.error(f"RepeaterCore: PTT unkey error: {e}")
+            self.ptt = None
+            if self.ptt_mode != "VOX":
+                self.ptt_fallback = True
+            self.ptt_mode = "VOX"
+            return False
+    
+    def get_ptt_status(self):
+        # Get the device path from config, fallback to CM108 default if missing
+        device_file = self.config.config.get('ptt', {}).get('device_path', '/dev/hidraw0')
+        config_mode = self.config.config.get('ptt', {}).get('mode', 'NONE').upper()
+        mode = self.ptt_mode
+
+        # Fallback detected: user wanted CM108, but we’re in VOX now
+        if config_mode == 'CM108' and mode == 'VOX':
+            return ("VOX Mode: Fell Back from CM108 (Check Hardware)", "orange")
+
+        if mode == 'CM108':
+            if not self.ptt:
+                return ("CM108: Not Configured", "red")
+            if not os.path.exists(device_file):
+                return (f"CM108: Device File Missing ({device_file})", "red")
+            try:
+                with open(device_file, "wb", buffering=0) as f:
+                    pass
+                if getattr(self.ptt, "working", True):
+                    return (f"CM108: Hardware Detected ({device_file})", "green")
+                else:
+                    return (f"CM108: Detected, But Last Operation Failed ({device_file})", "orange")
+            except PermissionError:
+                return (f"CM108: Device Found, Permission Denied ({device_file})", "orange")
+            except Exception:
+                return (f"CM108: Device Found, Unusable ({device_file})", "orange")
+        elif mode == 'VOX':
+            return ("VOX Mode: No Hardware PTT", "blue")
+        elif mode == 'NONE':
+            return ("VOX Mode: No Hardware PTT", "blue")
+        else:
+            return ("Unknown Mode", "gray")

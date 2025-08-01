@@ -14,7 +14,7 @@ class PTTDialog(QDialog):
         self.gpio_pin_input.setRange(0, 40)
         self.gpio_pin_input.setValue(self.result.get("gpio_pin", 3))
         self.mode_combo = QComboBox()
-        self.mode_combo.addItems(["None", "CM108"])
+        self.mode_combo.addItems(["VOX", "CM108"])
         self.mode_combo.setCurrentText(self.result.get("mode", "None"))
 
         layout.addRow("Device Path:", self.device_path_input)

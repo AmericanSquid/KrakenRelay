@@ -203,6 +203,15 @@ class RepeaterUI(QMainWindow):
         timer.start()
         
         self.tabs.addTab(main_tab, "Main")
+
+        # PTT Status LED
+        self.ptt_status_label = QLabel("PTT Status: Initializing…")
+        
+        self.statusBar().addPermanentWidget(self.ptt_status_label)
+
+        self.ptt_status_timer = QTimer(self)
+        self.ptt_status_timer.timeout.connect(self.update_ptt_status_label)
+        self.ptt_status_timer.start(1000)  # every 1000 ms (1 second)
         
         # Settings Tab
         self.setup_settings_tab()
@@ -279,10 +288,16 @@ class RepeaterUI(QMainWindow):
         main_layout.addWidget(meter_group)
 
     def _update_mumble_led(self):
+        MUMBLE_COLOR_MAP = {
+            "online": "#3dff47",  # bright green
+            "offline": "#cccccc", # neutral gray
+        }
         if self.controller and self.controller.mumble:
-            self.mumble_led.setText("🟢 Mumble Online")
+                self.mumble_led.setText("🟢 Mumble Online")
+                self.mumble_led.setStyleSheet(f"color: {MUMBLE_COLOR_MAP['online']}; font-weight: normal;")
         else:
             self.mumble_led.setText("⚪ Mumble Offline")
+            self.mumble_led.setStyleSheet(f"color: {MUMBLE_COLOR_MAP['offline']}; font-weight: normal;")
 
     def setup_settings_tab(self):
         settings_tab = QWidget()
@@ -621,3 +636,37 @@ class RepeaterUI(QMainWindow):
     def send_manual_id(self):
         if self.controller:
             self.controller.send_id()
+
+    def update_ptt_status_label(self):
+        COLOR_MAP = {
+            "green":  "#3dff47",   # bright green
+            "orange": "#ffcc33",   # bright orange/yellow
+            "blue":   "#33bbff",   # bright blue
+            "red":    "#ff5252",   # bright red for errors
+            "gray":   "#cccccc",   # neutral gray
+        }
+
+        EMOJI_MAP = {
+            "green":  "🟢",
+            "orange": "🟠",
+            "blue":   "🔵",
+            "red":    "🔴",
+            "gray":   "⚪",
+        }
+
+        if not getattr(self, "controller", None):
+            self.ptt_status_label.setText("⚪ PTT: Not Started")
+            self.ptt_status_label.setStyleSheet(f"color: {COLOR_MAP['gray']}; font-weight: normal;")
+            return
+
+        status, color = self.controller.get_ptt_status()
+        emoji = EMOJI_MAP.get(color, "⚪")
+        css_color = COLOR_MAP.get(color, COLOR_MAP["gray"])
+        self.ptt_status_label.setText(f"{emoji} {status}")
+        self.ptt_status_label.setStyleSheet(f"color: {css_color}; font-weight: normal;")
+
+    def closeEvent(self, event):
+        print("[KrakenRelay] GUI window closed. Running cleanup…")
+        if hasattr(self, "controller") and self.controller:
+            self.controller.cleanup()
+        event.accept()

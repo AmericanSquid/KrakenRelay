@@ -35,8 +35,8 @@ class MumbleLink:
         self._running = True
 
         # Queues for LINK mode
-        self._rx_q: queue.Queue[np.ndarray] = queue.Queue(maxsize=50)
-        self._tx_q: queue.Queue[np.ndarray] = queue.Queue(maxsize=50)
+        self._rx_q: queue.Queue[np.ndarray] = queue.Queue(maxsize=1000)
+        self._tx_q: queue.Queue[np.ndarray] = queue.Queue(maxsize=1000)
 
         # Start client
         self._m = Mumble(
@@ -71,6 +71,7 @@ class MumbleLink:
             daemon = True
         )
 
+        self._shutdown_event = threading.Event()
         self._tx_thread.start()
         self._ping_thread.start()
 
@@ -93,7 +94,13 @@ class MumbleLink:
             pass      # drop on overload
 
     def disconnect(self) -> None:
+        logging.debug("Disconnecting Mumble...") 
         self._running = False
+
+        if hasattr(self, "_shutdown_event"):
+            logging.debug("Setting shutdown event for ping thread")
+            self._shutdown_event.set()
+
         self._m.stop()
 
         if hasattr(self, "_tx_thread") and self._tx_thread.is_alive():
@@ -102,8 +109,8 @@ class MumbleLink:
 
         if hasattr(self, "_ping_thread") and self._ping_thread.is_alive():
             logging.debug("Joining MumblePing thread...")
-            self._ping_thread.join(timeout=1.0)
-
+            self._ping_thread.join(timeout=2.0)
+            logging.debug(f"Ping thread alive after join: {self._ping_thread.is_alive()}")
     # ─── Internal callbacks / workers ─────────────────────────
     def _on_sound(self, user, chunk) -> None:
         print(f"Mumble: received audio, mode={self.mode}")  # DEBUG
@@ -118,10 +125,11 @@ class MumbleLink:
                     print("RX queue - dropping frame")  # DEBUG
 
         elif self.mode == "voter":
-            # TODO: implement per-user demux + jitter buffer
+            # TODO: implement per-user demux + jitter
             # 1) src = self._sources.get(user.session) or create _Source(...)
             # 2) src.enqueue(chunk.pcm)
             pass
+        print("RX queue size after put:", self._rx_q.qsize())
 
     def _tx_worker(self) -> None:
         while self._running:
@@ -137,12 +145,15 @@ class MumbleLink:
                 
     def _keepalive_worker(self) -> None:
         """Send a UDP Ping every 5s so Murmur never reaps us."""
-        while self._running:
+        logging.debug("Ping thread started")
+        while self._running and not self._shutdown_event.is_set():
             try:
                 self._m.ping()
+                logging.debug(f"Mumble ping sent at {time.strftime('%H:%M:%S')}")
             except Exception as e:
                 logging.warning(f"Mumble ping failed: {e}")
-            time.sleep(5)
+            self._shutdown_event.wait(5)
+        logging.debug("Ping thread exiting")
 
 
     # ─── Voter scaffolding (stub) ─────────────────────────────
@@ -175,6 +186,7 @@ class _Source:
     def read_frame(self) -> np.ndarray | None:
         try:
             return self._q.get_nowait()
+            print("RX queue size after get:", self._rx_q.qsize())
         except queue.Empty:
             return None
 
