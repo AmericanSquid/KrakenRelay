@@ -257,8 +257,10 @@ class RepeaterController:
         m_cfg = self.config.config['mumble']
         m_frame = None
 
+        chunk  = self.config.config['audio']['chunk_size']
+        
         if m_cfg.get('direction') == 'mumble_to_rf':
-            chunk  = self.config.config['audio']['chunk_size']
+            #chunk  = self.config.config['audio']['chunk_size']
             frame  = self.mumble.read_frame()
             if frame is not None and np.any(frame):
                 # key TX if needed, reset timers
@@ -267,8 +269,8 @@ class RepeaterController:
                 self._send_pcm(frame.astype(np.int16))
                 self.last_audio_time = time.time()
                 return
-        else:
-            samples = np.zeros(chunk, dtype=np.float32)
+        #else:
+            #samples = np.zeros(chunk, dtype=np.float32)
 
         if self.mumble and m_cfg.get('direction') != 'rf_to_mumble':
             m_frame = self.mumble.read_frame()
