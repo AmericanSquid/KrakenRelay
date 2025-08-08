@@ -5,12 +5,14 @@ import logging
 import signal
 import threading
 from typing import Optional
-from PyQt5.QtWidgets import QApplication
-from PyQt5.QtCore import QTimer
 from config_manager import ConfigManager
 from audio_manager import AudioDeviceManager
 from repeater_core import RepeaterController
-from ui import RepeaterUI
+
+# GUI imports will be loaded conditionally in run_gui()
+QApplication = None
+QTimer = None
+RepeaterUI = None
 
 #-------------------#
 # Shutdown Handling #
@@ -126,6 +128,22 @@ def run_headless(args: argparse.Namespace) -> None:
         logging.warning("Config failed to load. Falling back to default config.")
     audio_manager = AudioDeviceManager()
 
+    # If no devices specified, run interactive prompt
+    if args.input is None or args.output is None:
+        print("\nNo input/output device specified — entering setup...")
+        devices = audio_manager.list_devices()
+        print("\nAvailable Audio Devices:")
+        for dev in devices:
+            print(f"{dev['index']}: {dev['name']} "
+                  f"(in={dev['maxInputChannels']} out={dev['maxOutputChannels']})")
+        try:
+            args.input = input("\nEnter INPUT device index: ").strip()
+            args.output = input("Enter OUTPUT device index: ").strip()
+        except KeyboardInterrupt:
+            print("\nCancelled by user.")
+            audio_manager.cleanup()
+            sys.exit(0)
+
     try:
         input_idx = _resolve_device(args.input, audio_manager, "input")
         output_idx = _resolve_device(args.output, audio_manager, "output")
@@ -133,7 +151,7 @@ def run_headless(args: argparse.Namespace) -> None:
         logging.error(err)
         audio_manager.cleanup()
         sys.exit(1)
-
+    
     controller = RepeaterController(input_idx, output_idx, config, audio_manager)
 
     if args.id_now:
@@ -154,9 +172,16 @@ def run_headless(args: argparse.Namespace) -> None:
 #------------#
 # GUI runner #
 #------------#
-
 def run_gui() -> None:
-    global app
+    global app, QApplication, RepeaterUI
+    try:
+        from PyQt5.QtWidgets import QApplication
+        from PyQt5.QtCore import QTimer
+        from ui import RepeaterUI
+    except ImportError:
+        logging.error("PyQt5 or UI components not installed. Cannot run GUI mode.")
+        sys.exit(1)
+
     app = QApplication(sys.argv)
     config = ConfigManager()
     if not config.config:
