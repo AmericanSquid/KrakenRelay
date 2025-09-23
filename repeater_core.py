@@ -253,12 +253,33 @@ class RepeaterController:
             else:
                 logging.info("[Repeater] Audio thread stopped cleanly.") 
 
-        self.audio_manager.cleanup()
+        logging.info("[Repeater] Cleaning up audio streams.")
 
+        try:
+            if self.input_stream:
+                self.input_stream.stop_stream()
+                self.input_stream.close()
+        except Exception as e:
+            logging.warning(f"Failed to stop/close input stream: {e}")
+
+        try:
+            if self.output_stream:
+                self.output_stream.stop_stream()
+                self.output_stream.close()
+        except Exception as e:
+            logging.warning(f"Failed to stop/close output stream: {e}")
+
+        try:
+            if self.output_stream_2:
+                self.output_stream_2.stop_stream()
+                self.output_stream_2.close()
+        except Exception as e:
+            logging.warning(f"Failed to stop/close output stream 2: {e}")
+
+        self.audio_manager.cleanup()
         self.safe_ptt_unkey()
         
         logging.info("Repeater controller stopped and cleaned up")
-
         logging.info(f"🧵 Active threads after cleanup: {threading.active_count()}")
         for t in threading.enumerate():
             logging.info(f"  • {t.name}")

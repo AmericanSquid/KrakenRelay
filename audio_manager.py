@@ -95,29 +95,6 @@ class AudioDeviceManager:
             raise AudioDeviceError(f"Could not open output device {device_index}")
 
     def cleanup(self):
-        logging.info("[AudioManager] Cleaning up audio streams.")
-
-        try:
-            if self.input_stream:
-                self.input_stream.stop_stream()
-                self.input_stream.close()
-        except Exception as e:
-            logging.warning(f"Failed to stop/close input stream: {e}")
-
-        try:
-            if self.output_stream:
-                self.output_stream.stop_stream()
-                self.output_stream.close()
-        except Exception as e:
-            logging.warning(f"Failed to stop/close output stream: {e}")
-
-        try:
-            if self.output_stream_2:
-                self.output_stream_2.stop_stream()
-                self.output_stream_2.close()
-        except Exception as e:
-            logging.warning(f"Failed to stop/close output stream 2: {e}")
-
         try:
             self.pa.terminate()
             logging.info("[AudioManager] PortAudio engine terminated.")
