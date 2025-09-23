@@ -44,11 +44,12 @@ jobs:
 
       - name: Install dependencies
         run: |
+          brew install portaudio
           pip install --upgrade pip
           pip install pyinstaller numpy scipy pyqt5 pyqtgraph pyaudio pyyaml
 
       - name: Build macOS binary
-        run: pyinstaller --onefile --name krakenrelay main.py
+        run: pyinstaller --onefile --add-binary "/opt/homebrew/lib/libportaudio.2.dylib:." --name krakenrelay main.py
 
       - name: Upload macOS Binary
         uses: actions/upload-artifact@v4
@@ -65,7 +66,7 @@ jobs:
       - name: Install system dependencies
         run: |
           apt-get update && apt-get install -y \
-          python3 python3-pip python3-dev \
+          python3-full python3 python3-pip python3-dev \
           build-essential libffi-dev libssl-dev \
           portaudio19-dev libportaudio2 libasound-dev \
           libgl1 libx11-xcb-dev libxcb-xinerama0 libxkbcommon-x11-0 \
