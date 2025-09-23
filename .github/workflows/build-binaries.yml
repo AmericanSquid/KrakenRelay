@@ -56,7 +56,6 @@ jobs:
         with:
           name: krakenrelay-macos
           path: dist/krakenrelay
-
   linux:
     name: 🐧 Build on Debian (Linux)
     runs-on: ubuntu-22.04
