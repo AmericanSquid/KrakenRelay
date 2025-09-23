@@ -7,7 +7,12 @@ class ConfigManager:
         self.config_path = config_path
         self.config = self.load_config()
         if self.config is None:
+            logging.warning(f"No config found at '{self.config_path}' — generating default.")
             self.config = self.get_default_config()
+            self.save_config()
+            logging.info(f"Default config saved to '{self.config_path}'")
+        else:
+            logging.info("Config loaded successfully.")
         
     def load_config(self):
         try:
@@ -32,28 +37,25 @@ class ConfigManager:
             'audio': {
                 'sample_rate': 48000,
                 'chunk_size': 1024,
-                'input_gain': 0,
-                'output_gain': 0,
                 'squelch_threshold': -40,
                 'highpass_enabled': True,
                 'highpass_cutoff': 300,
-                'noise_gate_enabled': False,
-                'noise_gate_threshold': 500
+                'dual_output': False,
+                'output_device_2': None
             },
             'repeater': {
-                'pl_tone_freq': 162.2,
-                'pl_threshold': 0.1,
                 'tail_time': 2.0,
                 'anti_kerchunk_time': 0,
                 'carrier_delay': 0,
-                'courtesy_tone_enabled': True,
-                'cw_wpm': 18,
-                'cw_pitch': 700,
-                'callsign': 'K3AYV'
+                'courtesy_tone_enabled': True
             },
             'identification': {
                 'interval_minutes': 10,
-                'cw_enabled': True
+                'cw_enabled': True,
+                'callsign': "KR4KEN",
+                'cw_pitch': 523,
+                'cw_wpm': 20,
+                'cw_volume': 0.5
             },
             'tot': {
                 'tot_enabled': True,
@@ -62,16 +64,6 @@ class ConfigManager:
                 'tot_lockout_time': 5,
                 'tot_tone_freq': 1200
             },
-            "mumble": {
-                "enabled": False,
-                "mode": "link",          # link | voter   (voter stubbed)
-                "direction": "bidirectional",     # bidirectional | rf_to_mumble | mumble_to_rf
-                "host": "127.0.0.1",
-                "port": 64738,
-                "user": "KrakenRelay",
-                "password": "",
-                "channel": "RepeaterLink",
-            }, 
             "ptt": {
                 "mode": "CM108",
                 "device_path": "/dev/hidraw0",

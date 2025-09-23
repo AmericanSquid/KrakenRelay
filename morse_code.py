@@ -12,11 +12,12 @@ class MorseCode:
         '9': '----.'
     }
 
-    def __init__(self, wpm=20, frequency=800, sample_rate=8000):
+    def __init__(self, wpm=20, frequency=800, sample_rate=8000, volume=0.5):
         self.dot_length = int(1.2 / wpm * sample_rate)
         self.dash_length = self.dot_length * 3
         self.frequency = frequency
         self.sample_rate = sample_rate
+        self.volume = volume
 
     def generate(self, text):
         t = np.arange(self.dot_length) / self.sample_rate
@@ -33,4 +34,4 @@ class MorseCode:
                     output = np.append(output, space)
                 output = np.append(output, space * 2)
                 
-        return (output * 32767).astype(np.int16)
+        return (output * self.volume * 32767).astype(np.int16)

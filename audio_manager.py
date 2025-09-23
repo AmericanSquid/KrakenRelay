@@ -5,25 +5,9 @@ from scipy.signal import butter, lfilter
 from collections import deque
 import threading
 
-class AudioBuffer:
-    def __init__(self, maxlen=10):
-        self.buffer = deque(maxlen=maxlen)
-        self.lock = threading.Lock()
-        
-    def write(self, data):
-        with self.lock:
-            self.buffer.append(data)
-            
-    def read(self):
-        with self.lock:
-            return self.buffer.popleft() if self.buffer else None
-
 class AudioDeviceManager:
     def __init__(self):
         self.pa = pyaudio.PyAudio()
-        self.tone_detector = ToneDetector()
-        self.input_buffer = AudioBuffer()
-        self.output_buffer = AudioBuffer()
         logging.info("Audio manager initialized")
         
     def list_devices(self):
@@ -110,39 +94,35 @@ class AudioDeviceManager:
             logging.error(f"Failed to create output stream: {e}")
             raise AudioDeviceError(f"Could not open output device {device_index}")
 
-    def calibrate_levels(self):
-        samples = []
-        for _ in range(30):
-            data = self.input_stream.read(1024)
-            samples.extend(np.frombuffer(data, dtype=np.int16))
-        noise_floor = np.mean(np.abs(samples))
-        return noise_floor
-    
     def cleanup(self):
-        logging.info("Cleaning up audio manager")
-        self.pa.terminate()
+        logging.info("[AudioManager] Cleaning up audio streams.")
 
-class ToneDetector:
-    def __init__(self, sample_rate=44100, target_freq=141.3, bandwidth=3.0, threshold=0.001, alpha=0.3):
-        self.target_freq = target_freq
-        self.bandwidth = bandwidth
-        self.sample_rate = sample_rate
-        self.threshold = threshold
-        self.alpha = alpha
-        self.smoothed_energy = 0.0
+        try:
+            if self.input_stream:
+                self.input_stream.stop_stream()
+                self.input_stream.close()
+        except Exception as e:
+            logging.warning(f"Failed to stop/close input stream: {e}")
 
-        lowcut = target_freq - bandwidth
-        highcut = target_freq + bandwidth
-        self.b, self.a = butter(4, [lowcut, highcut], fs=sample_rate, btype='band')
-        
-        logging.info(f"ToneDetector initialized: target={target_freq}Hz, bandwidth=±{bandwidth}Hz")
+        try:
+            if self.output_stream:
+                self.output_stream.stop_stream()
+                self.output_stream.close()
+        except Exception as e:
+            logging.warning(f"Failed to stop/close output stream: {e}")
 
-    def detect_tone(self, audio_data):
-        filtered = lfilter(self.b, self.a, audio_data)
-        energy = np.sum(filtered ** 2)
-        self.smoothed_energy = self.alpha * energy + (1 - self.alpha) * self.smoothed_energy
-        logging.debug(f"ToneDetector: energy={self.smoothed_energy:.6f}")
-        return self.smoothed_energy > self.threshold
+        try:
+            if self.output_stream_2:
+                self.output_stream_2.stop_stream()
+                self.output_stream_2.close()
+        except Exception as e:
+            logging.warning(f"Failed to stop/close output stream 2: {e}")
+
+        try:
+            self.pa.terminate()
+            logging.info("[AudioManager] PortAudio engine terminated.")
+        except Exception as e:
+            logging.warning(f"[AudioManager] Failed to terminate PortAudio: {e}")
 
 class AudioDeviceError(Exception):
     pass

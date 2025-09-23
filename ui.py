@@ -4,7 +4,6 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                            QDoubleSpinBox, QSizePolicy)
 from PyQt5.QtCore import Qt, QTimer
 import numpy as np
-from dialogs.mumble import MumbleDialog
 from dialogs.ptt import PTTDialog
 
 class RepeaterUI(QMainWindow):
@@ -174,34 +173,12 @@ class RepeaterUI(QMainWindow):
         highpass_layout.addWidget(self.highpass_value)
         processing_layout.addLayout(highpass_layout)
         
-        # Noise Gate Controls
-        noise_gate_layout = QHBoxLayout()
-        self.noise_gate_enabled = QCheckBox("Noise Gate")
-        self.noise_gate_enabled.setChecked(self.config.config['audio']['noise_gate_enabled'])
-        noise_gate_layout.addWidget(self.noise_gate_enabled)
-        
-        self.noise_gate_threshold = QSlider(Qt.Horizontal)
-        self.noise_gate_threshold.setRange(0, 2000)
-        self.noise_gate_threshold.setValue(self.config.config['audio']['noise_gate_threshold'])
-        noise_gate_layout.addWidget(self.noise_gate_threshold)
-        self.noise_gate_value = QLabel(f"{self.noise_gate_threshold.value()}")
-        noise_gate_layout.addWidget(self.noise_gate_value)
-        processing_layout.addLayout(noise_gate_layout)
-        
         processing_group.setLayout(processing_layout)
         main_layout.addWidget(processing_group)
         
         # Audio Meter
         self.setup_audio_meter(main_layout)
 
-        # Mumble LED
-        self.mumble_led = QLabel("⚪ Mumble")   # instead of QtWidgets.QLabel
-        self.statusBar().addPermanentWidget(self.mumble_led)
-
-        timer = QTimer(self, interval=1000)
-        timer.timeout.connect(self._update_mumble_led)
-        timer.start()
-        
         self.tabs.addTab(main_tab, "Main")
 
         # PTT Status LED
@@ -254,8 +231,6 @@ class RepeaterUI(QMainWindow):
         self.squelch_slider.valueChanged.connect(self.update_squelch)
         self.highpass_enabled.stateChanged.connect(self.update_highpass)
         self.highpass_cutoff.valueChanged.connect(self.update_highpass_cutoff)
-        self.noise_gate_enabled.stateChanged.connect(self.update_noise_gate)
-        self.noise_gate_threshold.valueChanged.connect(self.update_noise_gate_threshold)
 
     def setup_audio_meter(self, main_layout):
         meter_group = QGroupBox("Audio Level")
@@ -287,18 +262,6 @@ class RepeaterUI(QMainWindow):
         meter_group.setLayout(meter_layout)
         main_layout.addWidget(meter_group)
 
-    def _update_mumble_led(self):
-        MUMBLE_COLOR_MAP = {
-            "online": "#3dff47",  # bright green
-            "offline": "#cccccc", # neutral gray
-        }
-        if self.controller and self.controller.mumble:
-                self.mumble_led.setText("🟢 Mumble Online")
-                self.mumble_led.setStyleSheet(f"color: {MUMBLE_COLOR_MAP['online']}; font-weight: normal;")
-        else:
-            self.mumble_led.setText("⚪ Mumble Offline")
-            self.mumble_led.setStyleSheet(f"color: {MUMBLE_COLOR_MAP['offline']}; font-weight: normal;")
-
     def setup_settings_tab(self):
         settings_tab = QWidget()
         settings_layout = QVBoxLayout(settings_tab)
@@ -306,21 +269,6 @@ class RepeaterUI(QMainWindow):
         # Repeater Settings
         repeater_group = QGroupBox("Repeater Settings")
         repeater_layout = QVBoxLayout()
-
-        # PL Tone dropdown
-        pl_layout = QHBoxLayout()
-        pl_layout.addWidget(QLabel("PL Tone:"))
-        self.pl_combo = QComboBox()
-        ctcss_tones = [67.0, 71.9, 74.4, 77.0, 79.7, 82.5, 85.4, 88.5, 91.5, 94.8,
-                       97.4, 100.0, 103.5, 107.2, 110.9, 114.8, 118.8, 123.0, 127.3,
-                       131.8, 136.5, 141.3, 146.2, 151.4, 156.7, 162.2, 167.9, 173.8,
-                       179.9, 186.2, 192.8, 203.5, 210.7, 218.1, 225.7, 233.6, 241.8, 250.3]
-        self.pl_combo.addItems([f"{tone:.1f} Hz" for tone in ctcss_tones])
-        current_pl = self.config.config['repeater']['pl_tone_freq']
-        index = ctcss_tones.index(current_pl) if current_pl in ctcss_tones else 0
-        self.pl_combo.setCurrentIndex(index)
-        pl_layout.addWidget(self.pl_combo)
-        repeater_layout.addLayout(pl_layout)
 
         # Precise control sliders
         self.add_precise_control(repeater_layout, "Hang Time (s)", "repeater.tail_time", 0, 10, 0.1)
@@ -342,7 +290,7 @@ class RepeaterUI(QMainWindow):
         callsign_layout = QHBoxLayout()
         callsign_layout.addWidget(QLabel("Callsign:"))
         self.callsign_input = QLineEdit()
-        self.callsign_input.setText(self.config.config['repeater']['callsign'])
+        self.callsign_input.setText(self.config.config['identification']['callsign'])
         callsign_layout.addWidget(self.callsign_input)
         id_layout.addLayout(callsign_layout)
 
@@ -364,7 +312,7 @@ class RepeaterUI(QMainWindow):
         cw_speed_layout.addWidget(QLabel("CW Speed (WPM):"))
         self.cw_speed = QSpinBox()
         self.cw_speed.setRange(5, 30)
-        self.cw_speed.setValue(self.config.config['repeater']['cw_wpm'])
+        self.cw_speed.setValue(self.config.config['identification']['cw_wpm'])
         cw_speed_layout.addWidget(self.cw_speed)
         id_layout.addLayout(cw_speed_layout)
 
@@ -372,7 +320,7 @@ class RepeaterUI(QMainWindow):
         cw_pitch_layout.addWidget(QLabel("CW Pitch (Hz):"))
         self.cw_pitch = QSpinBox()
         self.cw_pitch.setRange(400, 1200)
-        self.cw_pitch.setValue(self.config.config['repeater']['cw_pitch'])
+        self.cw_pitch.setValue(self.config.config['identification']['cw_pitch'])
         cw_pitch_layout.addWidget(self.cw_pitch)
         id_layout.addLayout(cw_pitch_layout)
 
@@ -427,11 +375,6 @@ class RepeaterUI(QMainWindow):
 
         btn_row = QHBoxLayout()
 
-        mumble_btn = QPushButton("Mumble Settings")
-        mumble_btn.clicked.connect(self.open_mumble_settings)
-        mumble_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        btn_row.addWidget(mumble_btn)
-
         ptt_btn = QPushButton("PTT Settings")
         ptt_btn.clicked.connect(self.open_ptt_settings)
         ptt_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -440,7 +383,6 @@ class RepeaterUI(QMainWindow):
         settings_layout.addLayout(btn_row)
 
         # Connect all settings signals
-        self.pl_combo.currentTextChanged.connect(self.update_pl_tone)
         self.courtesy_enabled.stateChanged.connect(self.update_courtesy_tone)
         self.callsign_input.textChanged.connect(self.update_callsign)
         self.id_interval.valueChanged.connect(self.update_id_interval)
@@ -454,15 +396,6 @@ class RepeaterUI(QMainWindow):
         self.tot_tone_freq.valueChanged.connect(self.update_tot_tone_freq)
 
         self.tabs.addTab(settings_tab, "Settings")
-
-    def open_mumble_settings(self):
-        cfg = self.config.config['mumble']          # live dict from ConfigManager
-        dlg = MumbleDialog(cfg, self)               # modal; class in step 2
-        if dlg.exec_():                             # OK pressed
-            self.config.config['mumble'] = dlg.result_config()
-            self.config.save_config()                      # write YAML
-        if self.controller is not None:
-            self.controller.reload_mumble_link()
 
     def open_ptt_settings(self):
         cfg = self.config.config['ptt']  # existing dictionary from config
@@ -541,23 +474,6 @@ class RepeaterUI(QMainWindow):
         self.highpass_value.setText(f"{value} Hz")
         self.config.save_config()
         
-    def update_noise_gate(self):
-        enabled = self.noise_gate_enabled.isChecked()
-        self.config.config['audio']['noise_gate_enabled'] = enabled
-        self.noise_gate_threshold.setEnabled(enabled)
-        self.config.save_config()
-        
-    def update_noise_gate_threshold(self):
-        value = self.noise_gate_threshold.value()
-        self.config.config['audio']['noise_gate_threshold'] = value
-        self.noise_gate_value.setText(str(value))
-        self.config.save_config()
-
-    def update_pl_tone(self, text):
-        tone = float(text.split()[0])
-        self.config.config['repeater']['pl_tone_freq'] = tone
-        self.config.save_config()
-    
     def update_courtesy_tone(self):
         enabled = self.courtesy_enabled.isChecked()
         self.config.config['repeater']['courtesy_tone_enabled'] = enabled
@@ -565,7 +481,7 @@ class RepeaterUI(QMainWindow):
     
     def update_callsign(self):
         callsign = self.callsign_input.text().upper()
-        self.config.config['repeater']['callsign'] = callsign
+        self.config.config['identification']['callsign'] = callsign
         self.config.save_config()
     
     def update_id_interval(self):
@@ -580,12 +496,12 @@ class RepeaterUI(QMainWindow):
     
     def update_cw_speed(self):
         speed = self.cw_speed.value()
-        self.config.config['repeater']['cw_wpm'] = speed
+        self.config.config['identification']['cw_wpm'] = speed
         self.config.save_config()
     
     def update_cw_pitch(self):
         pitch = self.cw_pitch.value()
-        self.config.config['repeater']['cw_pitch'] = pitch
+        self.config.config['identification']['cw_pitch'] = pitch
         self.config.save_config()
         
     def debug_audio(self):
