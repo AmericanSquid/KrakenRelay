@@ -1,0 +1,89 @@
+name: Cross-Platform KrakenRelay Builds
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  windows:
+    name: 🪟 Build on Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pyinstaller numpy scipy pyqt5 pyqtgraph pyaudio pyyaml
+
+      - name: Build .exe
+        run: pyinstaller --onefile --name krakenrelay main.py
+
+      - name: Upload Windows Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: krakenrelay-windows
+          path: dist/krakenrelay.exe
+
+  macos:
+    name: 🍏 Build on macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pyinstaller numpy scipy pyqt5 pyqtgraph pyaudio pyyaml
+
+      - name: Build macOS binary
+        run: pyinstaller --onefile --name krakenrelay main.py
+
+      - name: Upload macOS Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: krakenrelay-macos
+          path: dist/krakenrelay
+
+  linux:
+    name: 🐧 Build on Debian (Linux)
+    runs-on: ubuntu-22.04
+    container: debian:bookworm
+
+    steps:
+      - name: Install system dependencies
+        run: |
+          apt-get update && apt-get install -y \
+          python3 python3-pip python3-dev \
+          build-essential libffi-dev libssl-dev \
+          portaudio19-dev libportaudio2 libasound-dev \
+          libgl1 libx11-xcb-dev libxcb-xinerama0 libxkbcommon-x11-0 \
+          git curl ffmpeg
+
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install Python packages
+        run: |
+          pip3 install --upgrade pip
+          pip3 install pyinstaller numpy scipy pyqt5 pyqtgraph pyaudio pyyaml
+
+      - name: Build Linux binary
+        run: pyinstaller --onefile --name krakenrelay main.py
+
+      - name: Upload Linux Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: krakenrelay-linux
+          path: dist/krakenrelay
