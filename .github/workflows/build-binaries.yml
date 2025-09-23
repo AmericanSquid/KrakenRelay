@@ -56,34 +56,3 @@ jobs:
         with:
           name: krakenrelay-macos
           path: dist/krakenrelay
-  linux:
-    name: 🐧 Build on Debian (Linux)
-    runs-on: ubuntu-22.04
-    container: debian:bookworm
-
-    steps:
-      - name: Install system dependencies
-        run: |
-          apt-get update && apt-get install -y \
-          python3-full python3 python3-pip python3-dev \
-          build-essential libffi-dev libssl-dev \
-          portaudio19-dev libportaudio2 libasound-dev \
-          libgl1 libx11-xcb-dev libxcb-xinerama0 libxkbcommon-x11-0 \
-          git curl ffmpeg
-
-      - name: Check out code
-        uses: actions/checkout@v4
-
-      - name: Install Python packages
-        run: |
-          pip3 install --upgrade pip
-          pip3 install pyinstaller numpy scipy pyqt5 pyqtgraph pyaudio pyyaml
-
-      - name: Build Linux binary
-        run: pyinstaller --onefile --name krakenrelay main.py
-
-      - name: Upload Linux Binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: krakenrelay-linux
-          path: dist/krakenrelay
