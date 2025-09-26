@@ -529,26 +529,41 @@ class RepeaterUI(QMainWindow):
         
     def start_repeater(self):
         from repeater_core import RepeaterController
+        self.start_button.setEnabled(False)
         input_idx = self.device_indices['input'][self.input_combo.currentIndex()]
         output_idx = self.device_indices['output'][self.output_combo.currentIndex()]
-        
-        self.controller = RepeaterController(
-            input_idx,
-            output_idx,
-            self.config,
-            self.audio_manager
-        )
-        self.controller.start()
-        self.start_button.setEnabled(False)
-        self.stop_button.setEnabled(True)
+
+        try:        
+            self.controller = RepeaterController(
+                input_idx,
+                output_idx,
+                self.config,
+                self.audio_manager
+            )
+            self.controller.start()
+            self.stop_button.setEnabled(True)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to start repeater:\n{str(e)}")
+            self.controller = None
+            self.start_button_setEnabled(True)
         
     def stop_repeater(self):
+        self.start_button.setEnabled(False)
+        self.stop_button.setEnabled(False)
+
         if self.controller:
             self.controller.cleanup()
+            
+            if hasattr(self.controller, "audio_thread"):
+                timeout = 3
+                start = time.time()
+                while self.controller.audio_thread.is_alive() and time.time() - start < timeout:
+                    time.sleep(0.1)
+
             self.controller = None
-        self.start_button.setEnabled(True)
-        self.stop_button.setEnabled(False)
         
+        self.start_button.setEnabled(True)
+ 
     def send_manual_id(self):
         if self.controller:
             self.controller.send_id()

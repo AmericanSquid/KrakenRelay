@@ -165,6 +165,11 @@ class RepeaterController:
         logging.info("[Repeater] Audio thread started.")
 
         while self.running:
+            if self.tot_locked:
+                lockout_time = self.config.config['tot'].get('tot_lockout_time', 180)
+                if time.time() - self.lockout_start_time > lockout_time:
+                    self.tot_locked = False
+                    logging.info("🔓 TOT lockout released")
             try:
                 self.process_audio()
 
@@ -343,9 +348,12 @@ class RepeaterController:
                 if self.config.config['tot']['tot_lockout_enabled']:
                     logging.info("TOT lockout activated")
                     self.tot_locked = True
-                    time.sleep(self.config.config['tot']['tot_lockout_time'])
-                    self.tot_locked = False
-                    logging.info("TOT lockout released")
+                    self.lockout_start_time = time.time()
+                    #time.sleep(self.config.config['tot']['tot_lockout_time'])
+                    self.safe_ptt_unkey()
+                    self.transmitting = False
+                    self.transmission_start_time = None
+
                 self.stop_transmission()
                 return   
 
@@ -389,6 +397,9 @@ class RepeaterController:
     # Tone Functions #
     #----------------#
     def send_id(self):
+        if self.transmitting:
+            logging.warning("Unable to Send Manual ID: already transmitting")
+            return
         try:
             callsign = self.config.config['identification']['callsign']
             if self.config.config['identification']['cw_enabled']:
@@ -451,17 +462,20 @@ class RepeaterController:
     #----------------------#
 
     def start_transmission(self):
-            if not self.tot_locked:
-                if time.time() - self.last_transmission > self.config.config['repeater']['anti_kerchunk_time']:
-                    self.transmitting = True
-                    self.transmission_start_time = time.time() # Set start time
-                    self.tot_timer = 0
+        if self.tot_locked:
+            logging.warning("Attempted to start transmission during TOT lockout. Blocking.")
+            return
+        if not self.tot_locked:
+            if time.time() - self.last_transmission > self.config.config['repeater']['anti_kerchunk_time']:
+                self.transmitting = True
+                self.transmission_start_time = time.time() # Set start time
+                self.tot_timer = 0
 
-            if self.ptt_mode == 'CM108':
-                self.safe_ptt_key()
-            else:
-                threading.Timer(self.config.config['repeater']['carrier_delay'], lambda: logging.info("Carrier delay elapsed")).start()
-                logging.info("Starting transmission")
+        if self.ptt_mode == 'CM108':
+            self.safe_ptt_key()
+        else:
+            threading.Timer(self.config.config['repeater']['carrier_delay'], lambda: logging.info("Carrier delay elapsed")).start()
+            logging.info("Starting transmission")
 
     def stop_transmission(self):
         # Prime ALSA before tone playback
