@@ -2,14 +2,20 @@ name: Cross-Platform KrakenRelay Builds
 
 on:
   push:
-    tags:
-      - "v*.*.*"   # trigger only when pushing a version tag
+    branches: [ main ]            # CI builds on main
+    tags: [ "v*.*.*" ]            # Release builds on version tags
   workflow_dispatch:
+
+env:
+  APP_NAME: krakenrelay
 
 jobs:
   windows:
     name: 🪟 Build on Windows
     runs-on: windows-latest
+    permissions:
+      actions: read
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -24,17 +30,20 @@ jobs:
           pip install pyinstaller numpy scipy pyqt5 pyqtgraph pyaudio pyyaml
 
       - name: Build .exe
-        run: pyinstaller --onefile --name krakenrelay main.py
+        run: pyinstaller --onefile --name $env:APP_NAME main.py
 
       - name: Upload Windows Binary
         uses: actions/upload-artifact@v4
         with:
-          name: krakenrelay-windows
-          path: dist/krakenrelay.exe
+          name: ${{ env.APP_NAME }}-windows
+          path: dist/${{ env.APP_NAME }}.exe
 
   macos:
     name: 🍏 Build on macOS
     runs-on: macos-latest
+    permissions:
+      actions: read
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -50,70 +59,83 @@ jobs:
           pip install pyinstaller numpy scipy pyqt5 pyqtgraph pyaudio pyyaml
 
       - name: Build macOS binary
-        run: pyinstaller --onefile --add-binary "/opt/homebrew/lib/libportaudio.2.dylib:." --name krakenrelay main.py
+        run: pyinstaller --onefile --add-binary "/opt/homebrew/lib/libportaudio.2.dylib:." --name $APP_NAME main.py
 
       - name: Upload macOS Binary
         uses: actions/upload-artifact@v4
         with:
-          name: krakenrelay-macos
-          path: dist/krakenrelay
+          name: ${{ env.APP_NAME }}-macos
+          path: dist/${{ env.APP_NAME }}
 
   linux-docker:
-    name: 🐧 Build Linux Binary + Docker Image
+    name: 🐧 Build Linux Binary + (tagged) Docker Image
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      packages: write       # needed to push to GHCR on tags
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build container (multi-stage Dockerfile)
-        run: docker build -t krakenrelay .
+      - name: Build container (uses your multi-stage Dockerfile)
+        run: docker build -t ${{ env.APP_NAME }} .
 
-      - name: Extract Linux binary
+      - name: Extract Linux binary from image
         run: |
-          id=$(docker create krakenrelay)
-          docker cp $id:/usr/local/bin/app ./krakenrelay
-          docker rm -v $id
+          id=$(docker create ${{ env.APP_NAME }})
+          docker cp "$id":/usr/local/bin/app "./${{ env.APP_NAME }}"
+          docker rm -v "$id"
+          chmod +x "./${{ env.APP_NAME }}"
 
       - name: Upload Linux Binary
         uses: actions/upload-artifact@v4
         with:
-          name: krakenrelay-linux
-          path: ./krakenrelay
+          name: ${{ env.APP_NAME }}-linux
+          path: ./${{ env.APP_NAME }}
 
+      # Push container image only for tags
       - name: Set up Docker Buildx
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GitHub Container Registry
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push container image
+      - name: Build and push image (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/krakenrelay:latest
-            ghcr.io/${{ github.repository }}/krakenrelay:${{ github.ref_name }}
+            ghcr.io/${{ github.repository }}/${{ env.APP_NAME }}:latest
+            ghcr.io/${{ github.repository }}/${{ env.APP_NAME }}:${{ github.ref_name }}
 
   release:
-    name: 📦 Publish Release
+    name: 📦 Publish GitHub Release (tags only)
     runs-on: ubuntu-latest
     needs: [windows, macos, linux-docker]
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      actions: read         # download artifacts
+      contents: write       # create the release & upload assets
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: ./artifacts
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release & upload assets
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/krakenrelay-windows/krakenrelay.exe
-            artifacts/krakenrelay-macos/krakenrelay
-            artifacts/krakenrelay-linux/krakenrelay
+            artifacts/${{ env.APP_NAME }}-windows/${{ env.APP_NAME }}.exe
+            artifacts/${{ env.APP_NAME }}-macos/${{ env.APP_NAME }}
+            artifacts/${{ env.APP_NAME }}-linux/${{ env.APP_NAME }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
