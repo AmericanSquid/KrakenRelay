@@ -4,8 +4,10 @@ audio:
   squelch_threshold: -40
   highpass_enabled: true
   highpass_cutoff: 300
-  dual_output: true
-  output_device: 0
+  limiter_enabled: true
+  limiter_threshold: 0.85
+  dual_output: false
+  output_device: None
 repeater:
   tail_time: 2.0
   anti_kerchunk_time: 0
@@ -25,6 +27,12 @@ tot:
   tot_lockout_time: 5
   tot_tone_freq: 1200
 ptt:
-  mode: CM108
-  device_path: /dev/hidraw0
-  gpio_pin: 3
+  dual_ptt: false
+  primary:
+    mode: CM108
+    device_path: /dev/hidraw0
+    gpio_pin: 3
+  #secondary:
+  #    mode: CM108
+  #    device_path: /dev/hidraw0
+  #    gpio_pin: 3
