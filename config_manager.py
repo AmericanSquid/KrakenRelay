@@ -40,6 +40,8 @@ class ConfigManager:
                 'squelch_threshold': -40,
                 'highpass_enabled': True,
                 'highpass_cutoff': 300,
+                'limiter_enabled': True,
+                'limiter_threshold': 0.85,
                 'dual_output': False,
                 'output_device_2': None
             },
@@ -65,8 +67,16 @@ class ConfigManager:
                 'tot_tone_freq': 1200
             },
             "ptt": {
-                "mode": "CM108",
-                "device_path": "/dev/hidraw0",
-                "gpio_pin": "3",
+                "dual_ptt": True,
+                "primary": {
+                    "mode": "CM108",
+                    "device_path": "/dev/hidraw0",
+                    "gpio_pin": "3",
+                },
+                "secondary": {
+                    "mode": "CM108",
+                    "gpio_pin": "3",
+                    "device_path": "/dev/ttyUSB0",
+                }
             }
         }

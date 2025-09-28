@@ -5,6 +5,7 @@ import logging
 from scipy import signal
 from morse_code import MorseCode
 from ptt_controller import CM108PTT
+from audio_utils import check_clipping, limiter, apply_highpass_filter, calculate_db_level
 import os
 
 class RepeaterController:
@@ -19,19 +20,53 @@ class RepeaterController:
         self.input_device = input_device
         self.output_device = output_device
 
-        # PTT Setup
-        ptt_cfg = config.config.get('ptt', {})
-        self.ptt_mode = ptt_cfg.get('mode', 'NONE').upper()
+        # PTT Setup (dual + single + legacy)
+        ptt_cfg = config.config.get("ptt", {})
+        self.ptt = None
+        self.ptt_2 = None
+        self.ptt_mode = "NONE"
 
-        if self.ptt_mode == 'CM108':
-            self.ptt = CM108PTT(
-                device=ptt_cfg.get('device_path', '/dev/hidraw0'),
-                pin=int(ptt_cfg.get('gpio_pin', 3))
-            )
-            logging.info(f"PTT mode set to CM108 (device={self.ptt.device}, pin={self.ptt.pin})")
+        if ptt_cfg.get("dual_ptt", False):
+            # Dual PTT mode: read both
+            primary_cfg = ptt_cfg.get("primary", {})
+            secondary_cfg = ptt_cfg.get("secondary", {})
+
+            if primary_cfg.get("mode", "").upper() == "CM108":
+                self.ptt = CM108PTT(
+                    device=primary_cfg.get("device_path", "/dev/hidraw0"),
+                    pin=int(primary_cfg.get("gpio_pin", 3))
+                )
+                self.ptt_mode = "CM108"
+                logging.info(f"Primary PTT (CM108) on {self.ptt.device}, GPIO {self.ptt.pin}")
+            else:
+                self.ptt = None
+                logging.info("Primary PTT mode set to VOX (no GPIO control)")
+
+            if secondary_cfg.get("mode", "").upper() == "CM108":
+                self.ptt_2 = CM108PTT(
+                    device=secondary_cfg.get("device_path", "/dev/hidraw3"),
+                    pin=int(secondary_cfg.get("gpio_pin", 3))
+                )
+                logging.info(f"Secondary PTT (CM108) on {self.ptt_2.device}, GPIO {self.ptt_2.pin}")
+            else:
+                self.ptt = None
+                logging.info("Secondary PTT mode set to VOX (no GPIO control)")
+
         else:
-            self.ptt = None
-            logging.info("PTT mode set to VOX (no GPIO control)")
+            # Single PTT mode: check for new-style `primary` first, fallback to legacy
+            primary_cfg = ptt_cfg.get("primary", ptt_cfg)
+
+            if primary_cfg.get("mode", "").upper() == "CM108":
+                self.ptt = CM108PTT(
+                    device=primary_cfg.get("device_path", "/dev/hidraw0"),
+                    pin=int(primary_cfg.get("gpio_pin", 3))
+                )
+                self.ptt_mode = "CM108"
+                logging.info(f"PTT mode set to CM108 (device={self.ptt.device}, pin={self.ptt.pin})")
+            else:
+                self.ptt = None
+                logging.info("PTT mode set to VOX (no GPIO control)")
+
 
         # Audio Stream Set Up
         self.input_stream = None
@@ -44,6 +79,7 @@ class RepeaterController:
         self.tot_timer = 0
         self.tot_locked = False
         self.transmission_start_time = None
+        self.squelch_open_time = None
         self.last_audio_time = time.time()
         self.last_transmission = time.time()
         self.last_id_time = time.time()
@@ -80,36 +116,38 @@ class RepeaterController:
                 dev2_arg = audio_config.get('output_device_2', None)
                 second_index = None
 
-            # Resolve second device
-            if dev2_arg in (None, ""):
-                try:
-                    second_index = int(self.audio_manager.pa.get_default_output_device_info()['index'])
-                except Exception as e:
-                    logging.warning(f"Dual output: could not get default output device: {e}")
-                    second_index = None
-            elif isinstance(dev2_arg, int) or (isinstance(dev2_arg, str) and dev2_arg.isdigit()):
-                second_index = int(dev2_arg)
+                # Resolve second device
+                if dev2_arg in (None, ""):
+                    try:
+                        second_index = int(self.audio_manager.pa.get_default_output_device_info()['index'])
+                    except Exception as e:
+                        logging.warning(f"Dual output: could not get default output device: {e}")
+                        second_index = None
+                elif isinstance(dev2_arg, int) or (isinstance(dev2_arg, str) and dev2_arg.isdigit()):
+                    second_index = int(dev2_arg)
+                else:
+                    second_index = self.audio_manager.find_device_by_name(str(dev2_arg))
+
+                # Avoid duplicating the primary device
+                if second_index is None:
+                    logging.warning("Dual output requested but no valid output_device_2 resolved; continuing single-output.")
+                elif int(second_index) == int(self.output_device):
+                    logging.info("Dual output resolved to the same device as primary; skipping second stream.")
+                else:
+                    try:
+                        self.output_stream_2 = self.audio_manager.create_output_stream(
+                            device_index=second_index,
+                            rate=audio_config['sample_rate'],
+                            chunk=audio_config['chunk_size']
+                        )
+                        logging.info(f"Dual output enabled on device index {second_index}")
+                    except Exception as e:
+                        logging.warning(f"Dual output: failed to open second stream (idx={second_index}): {e}")
+                        self.output_stream_2 = None
             else:
-                second_index = self.audio_manager.find_device_by_name(str(dev2_arg))
+                logging.debug("Dual output disabled in config")
 
-            # Avoid duplicating the primary device
-            if second_index is None:
-                logging.warning("Dual output requested but no valid output_device_2 resolved; continuing single-output.")
-            elif int(second_index) == int(self.output_device):
-                logging.info("Dual output resolved to the same device as primary; skipping second stream.")
-            else:
-                try:
-                    self.output_stream_2 = self.audio_manager.create_output_stream(
-                        device_index=second_index,
-                        rate=audio_config['sample_rate'],
-                        chunk=audio_config['chunk_size']
-                    )
-                    logging.info(f"Dual output enabled on device index {second_index}")
-                except Exception as e:
-                    logging.warning(f"Dual output: failed to open second stream (idx={second_index}): {e}")
-                    self.output_stream_2 = None
-
-
+            # ---- Primary input/output streams ----
             self.input_stream = self.audio_manager.create_input_stream(
                 device_index=self.input_device,
                 rate=sample_rate,
@@ -128,17 +166,6 @@ class RepeaterController:
             logging.error(f"Failed to setup audio streams: {e}")
             raise
    
-    #---------------#
-    # Audio Filters #
-    #---------------#
-    def apply_highpass_filter(self, samples):
-        if not self.config.config['audio']['highpass_enabled']:
-            return samples
-        nyquist = self.config.config['audio']['sample_rate'] / 2
-        cutoff = self.config.config['audio']['highpass_cutoff']
-        b, a = signal.butter(4, cutoff/nyquist, btype='high')
-        return signal.filtfilt(b, a, samples)
-
     #----------------#
     # System Control #
     #----------------#
@@ -295,26 +322,22 @@ class RepeaterController:
     def check_squelch(self, samples):
         db_level = 20 * np.log10(np.sqrt(np.mean(samples**2)) / 32767)
         return db_level > self.config.config['audio']['squelch_threshold']
-    
-    def calculate_db_level(self, samples):
-        rms = np.sqrt(np.mean(samples**2))
-        if rms > 0:
-            db_level = 20 * np.log10(rms / 32767)
-        else:
-            db_level = -60  # Set minimum dB level for silence
-        return db_level
 
     def process_audio(self):
         data = self.input_stream.read(self.config.config['audio']['chunk_size'], exception_on_overflow=False)
         samples = np.frombuffer(data, dtype=np.int16).astype(np.float32)
-        self.current_rms = self.calculate_db_level(samples)
+        self.current_rms = calculate_db_level(samples)
         chunk  = self.config.config['audio']['chunk_size']
 
         # Check squelch first
         if self.check_squelch(samples):
             # Process audio chain
-            samples = self.apply_highpass_filter(samples)
-            
+            if self.config.config['audio'].get('highpass_enabled', True):
+                samples = apply_highpass_filter(
+                    samples,
+                    sample_rate=self.config.config['audio']['sample_rate'],
+                    cutoff=self.config.config['audio'].get('highpass_cutoff', 300)
+                )
             self.current_rms = np.sqrt(np.mean(samples**2))
             
             if not self.transmitting:
@@ -349,7 +372,6 @@ class RepeaterController:
                     logging.info("TOT lockout activated")
                     self.tot_locked = True
                     self.lockout_start_time = time.time()
-                    #time.sleep(self.config.config['tot']['tot_lockout_time'])
                     self.safe_ptt_unkey()
                     self.transmitting = False
                     self.transmission_start_time = None
@@ -360,6 +382,10 @@ class RepeaterController:
         if not self.transmitting:
             self.start_transmission()
 
+        if self.config.config['audio'].get('limiter_enabled', True):
+            samples = limiter(samples, threshold=self.config.config['audio'].get('limiter_threshold', 0.85))
+
+        check_clipping(samples) 
         self._send_pcm(samples.astype(np.int16))
         
         self.last_audio_time = time.time()
@@ -415,8 +441,8 @@ class RepeaterController:
 
     def generate_courtesy_tone(self):
         sample_rate = self.config.config['audio']['sample_rate']
-        duration = 0.15  # a little longer for clarity
-        frequency = 700
+        duration = 0.12  # a little longer for clarity
+        frequency = 659
 
         t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
         tone = np.sin(2 * np.pi * frequency * t)
@@ -426,7 +452,7 @@ class RepeaterController:
         tone[:fade_len] *= fade
         tone[-fade_len:] *= fade[::-1]
 
-        self.courtesy_tone = (tone * 0.5 * 32767).astype(np.int16)
+        self.courtesy_tone = (tone * 0.4 * 32767).astype(np.int16)
         logging.info(f"Generated courtesy tone at {frequency} Hz")
 
     def play_courtesy_tone(self):
@@ -465,17 +491,38 @@ class RepeaterController:
         if self.tot_locked:
             logging.warning("Attempted to start transmission during TOT lockout. Blocking.")
             return
-        if not self.tot_locked:
-            if time.time() - self.last_transmission > self.config.config['repeater']['anti_kerchunk_time']:
-                self.transmitting = True
-                self.transmission_start_time = time.time() # Set start time
-                self.tot_timer = 0
 
-        if self.ptt_mode == 'CM108':
-            self.safe_ptt_key()
-        else:
-            threading.Timer(self.config.config['repeater']['carrier_delay'], lambda: logging.info("Carrier delay elapsed")).start()
-            logging.info("Starting transmission")
+        self.transmitting = True
+        self.transmission_start_time = time.time()
+        self.tot_timer = 0
+
+        self.safe_ptt_key()
+
+        #if self.ptt_mode!= 'CM108':
+        delay_sec = self.config.config['repeater']['carrier_delay']
+        if delay_sec > 0:
+            logging.debug(f"[Repeater] Sending VOX keying burst for {delay_sec:.2f} seconds")
+    
+            sample_rate = self.config.config['audio']['sample_rate']
+            chunk_size = self.config.config['audio']['chunk_size']
+            num_chunks = int((delay_sec * sample_rate) // chunk_size)
+
+            for _ in range(num_chunks):
+                noise = (np.random.randint(-20000, 20000, chunk_size)).astype(np.int16).tobytes()
+                try:
+                    self.output_stream.write(noise)
+                except Exception as e:
+                    logging.debug(f"VOX carrier delay burst write failed: {e}")
+            
+                if self.output_stream_2:
+                    try:
+                        self.output_stream_2.write(noise)
+                    except Exception as e:
+                        logging.debug(f"VOX carrier delay burst write (output 2) failed: {e}")
+            
+                time.sleep(chunk_size / sample_rate)
+
+        logging.info("Starting transmission")
 
     def stop_transmission(self):
         # Prime ALSA before tone playback
@@ -533,8 +580,7 @@ class RepeaterController:
                 self.last_id_time = time.time()
                 logging.info("CW ID complete")
 
-        if self.ptt_mode == 'CM108':
-            self.safe_ptt_unkey()
+        self.safe_ptt_unkey()
 
     def play_audio_chunks(self, audio):
         chunk_size = self.config.config['audio']['chunk_size']
@@ -549,72 +595,136 @@ class RepeaterController:
     ################
 
     def safe_ptt_key(self):
-        try:
-            if self.ptt and getattr(self.ptt, "working", True):
-                self.ptt.key()
-                return True
-            else:
-                logging.warning("PTT missing or dead—skipping key() or using VOX fallback.")
-                if self.ptt_mode != "VOX":
-                    self.ptt_fallback = True
+        primary_success = False
+        secondary_success = False
+
+        # PRIMARY PTT
+        if self.ptt_mode == "CM108" and self.ptt:
+            try:
+                if getattr(self.ptt, "working", True):
+                    self.ptt.key()
+                    primary_success = True
+            except Exception as e:
+                logging.error(f"Primary PTT key error: {e}")
+                self.ptt = None
                 self.ptt_mode = "VOX"
-                return False
-        except Exception as e:
-            logging.error(f"RepeaterCore: PTT key error: {e}")
-            self.ptt = None
-            if self.ptt_mode != "VOX":
                 self.ptt_fallback = True
-            self.ptt_mode = "VOX"
-            return False
+                logging.warning("Primary PTT failed — fallback to VOX")
+
+        # SECONDARY PTT
+        if getattr(self, "ptt_2_mode", "CM108") == "CM108" and self.ptt_2:
+            try:
+                if getattr(self.ptt_2, "working", True):
+                    self.ptt_2.key()
+                    secondary_success = True
+            except Exception as e:
+                logging.error(f"Secondary PTT key error: {e}")
+                self.ptt_2 = None
+                self.ptt_2_mode = "VOX"
+                self.ptt_2_fallback = True
+                logging.warning("Secondary PTT failed — fallback to VOX")
+
+        return primary_success or secondary_success
 
     def safe_ptt_unkey(self):
-        try:
-            if self.ptt and getattr(self.ptt, "working", True):
-                self.ptt.unkey()
-                return True
-            else:
-                logging.warning("PTT missing or dead—skipping unkey() or using VOX fallback.")
-                if self.ptt_mode != "VOX":
-                    self.ptt_fallback = True
+        primary_success = False
+        secondary_success = False
+
+        if self.ptt_mode == "CM108" and self.ptt:
+            try:
+                if getattr(self.ptt, "working", True):
+                    self.ptt.unkey()
+                    primary_success = True
+            except Exception as e:
+                logging.error(f"Primary PTT unkey error: {e}")
+                self.ptt = None
                 self.ptt_mode = "VOX"
-                return False
-        except Exception as e:
-            logging.error(f"RepeaterCore: PTT unkey error: {e}")
-            self.ptt = None
-            if self.ptt_mode != "VOX":
                 self.ptt_fallback = True
-            self.ptt_mode = "VOX"
-            return False
+                logging.warning("Primary PTT unkey failed — fallback to VOX")
+
+        if getattr(self, "ptt_2_mode", "CM108") == "CM108" and self.ptt_2:
+            try:
+                if getattr(self.ptt_2, "working", True):
+                    self.ptt_2.unkey()
+                    secondary_success = True
+            except Exception as e:
+                logging.error(f"Secondary PTT unkey error: {e}")
+                self.ptt_2 = None
+                self.ptt_2_mode = "VOX"
+                self.ptt_2_fallback = True
+                logging.warning("Secondary PTT unkey failed — fallback to VOX")
+
+        return primary_success or secondary_success
     
     def get_ptt_status(self):
-        # Get the device path from config, fallback to CM108 default if missing
-        device_file = self.config.config.get('ptt', {}).get('device_path', '/dev/hidraw0')
-        config_mode = self.config.config.get('ptt', {}).get('mode', 'NONE').upper()
-        mode = self.ptt_mode
+        ptt_cfg = self.config.config.get("ptt", {})
+        dual_mode = ptt_cfg.get("dual_ptt", False)
 
-        # Fallback detected: user wanted CM108, but we’re in VOX now
-        if config_mode == 'CM108' and mode == 'VOX':
-            return ("VOX Mode: Fell Back from CM108 (Check Hardware)", "orange")
+        statuses = []
 
-        if mode == 'CM108':
-            if not self.ptt:
-                return ("CM108: Not Configured", "red")
-            if not os.path.exists(device_file):
-                return (f"CM108: Device File Missing ({device_file})", "red")
-            try:
-                with open(device_file, "wb", buffering=0) as f:
-                    pass
-                if getattr(self.ptt, "working", True):
-                    return (f"CM108: Hardware Detected ({device_file})", "green")
-                else:
-                    return (f"CM108: Detected, But Last Operation Failed ({device_file})", "orange")
-            except PermissionError:
-                return (f"CM108: Device Found, Permission Denied ({device_file})", "orange")
-            except Exception:
-                return (f"CM108: Device Found, Unusable ({device_file})", "orange")
-        elif mode == 'VOX':
-            return ("VOX Mode: No Hardware PTT", "blue")
-        elif mode == 'NONE':
-            return ("VOX Mode: No Hardware PTT", "blue")
+        # Determine where to look for primary PTT config
+        primary_cfg = ptt_cfg.get("primary", ptt_cfg)
+        device1 = primary_cfg.get("device_path", "/dev/hidraw0")
+        mode1 = primary_cfg.get("mode", "NONE").upper()
+
+        if self.ptt:
+            if not os.path.exists(device1):
+                statuses.append((f"Primary: Device Missing ({device1})", "red"))
+            else:
+                try:
+                    with open(device1, "wb", buffering=0):
+                        pass
+                    if getattr(self.ptt, "working", True):
+                        statuses.append((f"Primary: OK ({device1})", "green"))
+                    else:
+                        statuses.append((f"Primary: Detected, Last Op Failed ({device1})", "orange"))
+                except PermissionError:
+                    statuses.append((f"Primary: Permission Denied ({device1})", "orange"))
+                except Exception:
+                    statuses.append((f"Primary: Unusable ({device1})", "orange"))
         else:
-            return ("Unknown Mode", "gray")
+            if mode1 == "CM108":
+                statuses.append((f"Primary: Not Configured ({device1})", "red"))
+            else:
+                statuses.append(("Primary: VOX Mode", "blue"))
+
+        # If not dual PTT, return now
+        if not dual_mode:
+            return statuses[0]
+
+        # Check secondary
+        secondary_cfg = ptt_cfg.get("secondary", {})
+        device2 = secondary_cfg.get("device_path", "/dev/hidraw1")
+        mode2 = secondary_cfg.get("mode", "NONE").upper()
+
+        if self.ptt_2:
+            if not os.path.exists(device2):
+                statuses.append((f"Secondary: Device Missing ({device2})", "red"))
+            else:
+                try:
+                    with open(device2, "wb", buffering=0):
+                        pass
+                    if getattr(self.ptt_2, "working", True):
+                        statuses.append((f"Secondary: OK ({device2})", "green"))
+                    else:
+                        statuses.append((f"Secondary: Detected, Last Op Failed ({device2})", "orange"))
+                except PermissionError:
+                    statuses.append((f"Secondary: Permission Denied ({device2})", "orange"))
+                except Exception:
+                    statuses.append((f"Secondary: Unusable ({device2})", "orange"))
+        else:
+            if mode2 == "CM108":
+                statuses.append((f"Secondary: Not Configured ({device2})", "red"))
+            else:
+                statuses.append(("Secondary: VOX Mode", "blue"))
+
+        # Combine both into one string for GUI
+        combined_status = " | ".join([s[0] for s in statuses])
+        color = "green"
+        if any(c == "red" for _, c in statuses):
+            color = "red"
+        elif any(c == "orange" for _, c in statuses):
+            color = "orange"
+        elif all(c == "blue" for _, c in statuses):
+            color = "blue"
+        return (combined_status, color)

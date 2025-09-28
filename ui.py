@@ -1,10 +1,11 @@
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                            QLabel, QPushButton, QComboBox, QSlider, QGroupBox,
                            QCheckBox, QTabWidget, QProgressBar, QLineEdit, QSpinBox,
-                           QDoubleSpinBox, QSizePolicy)
+                           QDoubleSpinBox, QSizePolicy, QMessageBox)
 from PyQt5.QtCore import Qt, QTimer
 import numpy as np
 from dialogs.ptt import PTTDialog
+from audio_manager import AudioDeviceError
 
 class RepeaterUI(QMainWindow):
     def __init__(self, config, audio_manager):
@@ -529,7 +530,9 @@ class RepeaterUI(QMainWindow):
         
     def start_repeater(self):
         from repeater_core import RepeaterController
+
         self.start_button.setEnabled(False)
+
         input_idx = self.device_indices['input'][self.input_combo.currentIndex()]
         output_idx = self.device_indices['output'][self.output_combo.currentIndex()]
 
@@ -542,6 +545,17 @@ class RepeaterUI(QMainWindow):
             )
             self.controller.start()
             self.stop_button.setEnabled(True)
+        
+        except AudioDeviceError as e:
+            logging.critical(f"[Startup] Audio device initialization failed: {e}")
+            QMessageBox.critical(
+                self,
+                "Audio Device Error",
+                f"Failed to initialize audio devices:\n\n{e}\n\nTry choosing different input/output devices."
+            )
+            self.controller = None
+            self.start_button.setEnabled(true)
+
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to start repeater:\n{str(e)}")
             self.controller = None

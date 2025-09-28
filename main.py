@@ -6,7 +6,7 @@ import signal
 import threading
 from typing import Optional
 from config_manager import ConfigManager
-from audio_manager import AudioDeviceManager
+from audio_manager import AudioDeviceManager, AudioDeviceError
 from repeater_core import RepeaterController
 
 # GUI imports will be loaded conditionally in run_gui()
@@ -152,14 +152,20 @@ def run_headless(args: argparse.Namespace) -> None:
         audio_manager.cleanup()
         sys.exit(1)
     
-    controller = RepeaterController(input_idx, output_idx, config, audio_manager)
-
-    if args.id_now:
-        controller.send_id()
-
-    controller.start()
-    logging.info("Headless mode running – Ctrl+C to stop.")
-
+    try:
+        controller = RepeaterController(input_idx, output_idx, config, audio_manager)
+        if args.id_now:
+            controller.send_id()
+        controller.start()
+        logging.info("Headless mode running – Ctrl+C to stop.")
+    except AudioDeviceError as e:
+        logging.critical(f"[Startup] Audio device initialization failed: {e}")
+        print("\nAudio device error: Try selecting a different input/ouput device.")
+        sys.exit(1)
+    except Exception as e:
+        logging.critical(f"[Startup] Unexpected error: {e}")
+        print("\n Unexpectederror occurred. See logs for details.")
+        sys.exit(1)
     try:
         while not shutdown_event.is_set():
             time.sleep(1)
