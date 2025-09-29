@@ -155,7 +155,7 @@ def run_headless(args: argparse.Namespace) -> None:
     try:
         controller = RepeaterController(input_idx, output_idx, config, audio_manager)
         if args.id_now:
-            controller.send_id()
+            controller.schedule_id.send_id()
         controller.start()
         logging.info("Headless mode running – Ctrl+C to stop.")
     except AudioDeviceError as e:

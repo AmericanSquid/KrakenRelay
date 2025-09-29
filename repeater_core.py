@@ -3,8 +3,8 @@ import time
 import threading
 import logging
 from scipy import signal
-from morse_code import MorseCode
-from ptt_controller import CM108PTT, PTTManager
+from morse_code import ScheduleID
+from ptt_controller import PTTManager
 from tone_control import ToneGenerator, TonePlayer
 from audio_utils import check_clipping, limiter, apply_highpass_filter, calculate_db_level
 
@@ -35,19 +35,17 @@ class RepeaterController:
         self.squelch_open_time = None
         self.last_audio_time = time.time()
         self.last_transmission = time.time()
-        self.last_id_time = time.time()
         self.current_rms = 0
         
         # CW IDer Setup
-        self.morse = MorseCode(
-            wpm=config.config['identification']['cw_wpm'],
-            frequency=config.config['identification']['cw_pitch'],
-            sample_rate=config.config['audio']['sample_rate'],
-            volume=config.config['identification']['cw_volume']
+        self.schedule_id = ScheduleID(
+            config=self.config,
+            tx_start_fn=self.start_transmission,
+            tx_stop_fn=self.stop_transmission,
+            send_pcm_fn=self.play_audio_chunks,
+            tx_state_fn=lambda: self.transmitting,
+            set_skip_courtesy_fn=lambda: setattr(self, "skip_courtesy_tone", True)
         )
-        self.cw_audio = self.morse.generate(self.config.config['identification']['callsign'])
-        self.sending_id = False
-        self.post_tx = False
         self.skip_courtesy_tone = False
 
         # Thread Safety
@@ -161,21 +159,7 @@ class RepeaterController:
             try:
                 self.process_audio()
 
-                # === Idle & Post-TX CW ID === #
-                cooldown = 0.25
-                if self.config.config['identification']['cw_enabled']:
-                    interval = self.config.config['identification']['interval_minutes'] * 60
-                    should_id = time.time() - self.last_id_time > interval
-
-                    if should_id and self.post_tx and not self.sending_id:
-                        if time.time() - self.last_stop_time > cooldown:
-                            if self.post_tx:
-                                logging.info("Sending CW ID after user transmission.")
-                                self.post_tx = False
-                            else:
-                                logging.info("Sending CW ID while idle.")
-                            
-                            self.send_id()
+                self.schedule_id.check_and_send()
                             
                 if consecutive_errors:
                     logging.info("[Repeater] Audio loop recovered after %d error(s).", consecutive_errors)
@@ -457,11 +441,11 @@ class RepeaterController:
         self.transmission_start_time = None
         self.tot_timer = 0
         self.last_transmission = time.time()
-        self.post_tx = True
-        self.skip_courtesy_tone = False
-        self.last_stop_time = time.time()
+
         logging.info("Transmission stopped with fade-out")
 
+        self.schedule_id.mark_post_tx()
+        self.skip_courtesy_tone = False
         self.ptt_manager.safe_ptt_unkey()
         logging.info("Transmitter unkeyed.")
 
@@ -473,24 +457,4 @@ class RepeaterController:
                 chunk = np.pad(chunk, (0, chunk_size - len(chunk)))
             self._send_pcm(chunk)
 
-    def send_id(self):
-        if self.transmitting or self.sending_id:
-            logging.warning("Unable to Send Manual ID: already transmitting")
-            return
-        
-        self.sending_id = True
-        self.skip_courtesy_tone = True
-        try:
-            callsign = self.config.config['identification']['callsign']
-            if self.config.config['identification']['cw_enabled']:
-                self.start_transmission()
-                cw_audio = self.morse.generate(callsign)
-                self.play_audio_chunks(cw_audio)
-                self.stop_transmission()
-                logging.info(f"Sent CW ID: {callsign}")
-        except Exception as e:
-            logging.error(f"ID failed: {e}")
-        finally:
-            self.last_id_time = time.time()
-            self.sending_id = False
 

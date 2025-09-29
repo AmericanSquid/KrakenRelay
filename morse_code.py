@@ -37,3 +37,68 @@ class MorseCode:
                 output = np.append(output, space * 2)
                 
         return (output * self.volume * 32767).astype(np.int16)
+    
+class ScheduleID:
+    def __init__(self, config, tx_start_fn, tx_stop_fn, send_pcm_fn, tx_state_fn, set_skip_courtesy_fn):
+        self.config = config
+        self.morse = MorseCode(
+            wpm=config.config['identification']['cw_wpm'],
+            frequency=config.config['identification']['cw_pitch'],
+            sample_rate=config.config['audio']['sample_rate'],
+            volume=config.config['identification']['cw_volume']
+            )
+        self.tx_start = tx_start_fn
+        self.tx_stop = tx_stop_fn
+        self.send_pcm = send_pcm_fn
+        self.is_transmitting = tx_state_fn
+        self.set_skip_courtesy = set_skip_courtesy_fn
+        self.last_id_time = time.time()
+        self.post_tx = False
+        self.sending_id = False
+        self.last_stop_time = time.time()
+        self.cooldown = 0.25
+
+
+    def mark_post_tx(self):
+        self.post_tx = True
+        self.last_stop_time = time.time()
+    
+    def check_and_send(self):
+        # === Idle & Post-TX CW ID === #
+        if self.is_transmitting():
+            return
+        
+        if self.config.config['identification']['cw_enabled']:
+            interval = self.config.config['identification']['interval_minutes'] * 60
+            should_id = time.time() - self.last_id_time > interval
+
+            if should_id and self.post_tx and not self.sending_id:
+                if time.time() - self.last_stop_time > self.cooldown:
+                    if self.post_tx:
+                        logging.info("Sending CW ID after user transmission.")
+                        self.post_tx = False
+                    else:
+                        logging.info("Sending CW ID while idle.")
+                    
+                    self.send_id()
+    
+    def send_id(self):
+        if self.is_transmitting() or self.sending_id:
+            logging.warning("Unable to Send ID: already transmitting")
+            return
+        
+        self.sending_id = True
+        try:
+            callsign = self.config.config['identification']['callsign']
+            if self.config.config['identification']['cw_enabled']:
+                self.tx_start()
+                cw_audio = self.morse.generate(callsign)
+                self.send_pcm(cw_audio)
+                self.set_skip_courtesy()
+                self.tx_stop()
+                logging.info(f"Sent CW ID: {callsign}")
+        except Exception as e:
+            logging.error(f"ID failed: {e}")
+        finally:
+            self.last_id_time = time.time()
+            self.sending_id = False
