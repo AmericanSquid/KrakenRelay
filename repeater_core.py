@@ -2,7 +2,6 @@ import numpy as np
 import time
 import threading
 import logging
-from scipy import signal
 from morse_code import ScheduleID
 from ptt_controller import PTTManager
 from tone_control import ToneGenerator, TonePlayer
