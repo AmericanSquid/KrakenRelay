@@ -13,6 +13,7 @@ repeater:
   anti_kerchunk_time: 0
   carrier_delay: 0
   courtesy_tone_enabled: true
+  courtesy_tone_volume: 0.5
 identification:
   interval_minutes: 10
   cw_enabled: true
@@ -23,6 +24,7 @@ identification:
 tot:
   tot_enabled: true
   tot_time: 180
+  tot_volume: 0.5
   tot_lockout_enabled: true
   tot_lockout_time: 5
   tot_tone_freq: 1200
