@@ -7,7 +7,6 @@ from morse_code import MorseCode
 from ptt_controller import CM108PTT, PTTManager
 from tone_control import ToneGenerator, TonePlayer
 from audio_utils import check_clipping, limiter, apply_highpass_filter, calculate_db_level
-import os
 
 class RepeaterController:
 
@@ -46,13 +45,15 @@ class RepeaterController:
             sample_rate=config.config['audio']['sample_rate'],
             volume=config.config['identification']['cw_volume']
         )
-        # Pregenerate CW audio once using the callsign
         self.cw_audio = self.morse.generate(self.config.config['identification']['callsign'])
-        
+        self.sending_id = False
+        self.post_tx = False
+        self.skip_courtesy_tone = False
+
         # Thread Safety
         self.ptt_lock = threading.Lock()
 
-        # Initialize Tone Control Module
+        # Tone Control Setup
         self.tone_generator = ToneGenerator(self.config)
         self.tone_player = TonePlayer(
             config=self.config,
@@ -160,41 +161,22 @@ class RepeaterController:
             try:
                 self.process_audio()
 
-                # === Idle CW ID === #
+                # === Idle & Post-TX CW ID === #
+                cooldown = 0.25
                 if self.config.config['identification']['cw_enabled']:
                     interval = self.config.config['identification']['interval_minutes'] * 60
-                    if not self.transmitting and time.time() - self.last_id_time > interval:
-                        logging.info("Sending CW ID while idle")
-                        self.start_transmission()
-                        self.play_audio_chunks(self.cw_audio)
-                        self.transmitting = False
-                        self.transmission_start_time = None
+                    should_id = time.time() - self.last_id_time > interval
 
-                        fade_duration = 0.1
-                        sample_rate = self.config.config['audio']['sample_rate']
-                        chunk_size = self.config.config['audio']['chunk_size']
-                        num_fade_chunks = int((fade_duration * sample_rate) // chunk_size)
-        
-                        for i in range(num_fade_chunks):
-                            silent_chunk = (np.zeros(chunk_size)).astype(np.int16).tobytes()
-                            try:
-                                self.output_stream.write(silent_chunk)
-                            except Exception as e:
-                                logging.debug(f"Silence write (primary) failed (non-fatal): {e}")
-                            if self.output_stream_2:
-                                try:
-                                    self.output_stream_2.write(silent_chunk)
-                                except Exception as e:
-                                    logging.debug(f"Silence write (secondary) failed (non-fatal): {e}")
-                            time.sleep(chunk_size / sample_rate)
-            
-                        self.transmitting = False
-                        self.tot_timer = 0
-                        self.last_transmission = time.time()
-                        self.ptt_manager.safe_ptt_unkey()
-                        self.last_id_time = time.time()
-                        logging.info("Idle ID complete. Transmitter unkeyed.")
-
+                    if should_id and self.post_tx and not self.sending_id:
+                        if time.time() - self.last_stop_time > cooldown:
+                            if self.post_tx:
+                                logging.info("Sending CW ID after user transmission.")
+                                self.post_tx = False
+                            else:
+                                logging.info("Sending CW ID while idle.")
+                            
+                            self.send_id()
+                            
                 if consecutive_errors:
                     logging.info("[Repeater] Audio loop recovered after %d error(s).", consecutive_errors)
                     consecutive_errors = 0
@@ -388,26 +370,6 @@ class RepeaterController:
                     pass
                 self.output_stream_2 = None
 
-    #----------------#
-    # Tone Functions #
-    #----------------#
-    def send_id(self):
-        if self.transmitting:
-            logging.warning("Unable to Send Manual ID: already transmitting")
-            return
-        try:
-            callsign = self.config.config['identification']['callsign']
-            if self.config.config['identification']['cw_enabled']:
-                self.start_transmission()
-                cw_audio = self.morse.generate(callsign)
-                self.play_audio_chunks(cw_audio)
-                self.stop_transmission()
-                logging.info(f"Sent CW ID: {callsign}")
-        except Exception as e:
-            logging.error(f"ID failed: {e}")
-        finally:
-            self.last_id_time = time.time()
-
     #----------------------#
     # Transmission Control #
     #----------------------#
@@ -423,29 +385,29 @@ class RepeaterController:
 
         self.ptt_manager.safe_ptt_key()
 
-        #if self.ptt_mode!= 'CM108':
-        delay_sec = self.config.config['repeater']['carrier_delay']
-        if delay_sec > 0:
-            logging.debug(f"[Repeater] Sending VOX keying burst for {delay_sec:.2f} seconds")
-    
-            sample_rate = self.config.config['audio']['sample_rate']
-            chunk_size = self.config.config['audio']['chunk_size']
-            num_chunks = int((delay_sec * sample_rate) // chunk_size)
+        if self.ptt_manager.ptt_mode!= 'CM108':
+            delay_sec = self.config.config['repeater']['carrier_delay']
+            if delay_sec > 0:
+                logging.debug(f"[Repeater] Sending VOX keying burst for {delay_sec:.2f} seconds")
+        
+                sample_rate = self.config.config['audio']['sample_rate']
+                chunk_size = self.config.config['audio']['chunk_size']
+                num_chunks = int((delay_sec * sample_rate) // chunk_size)
 
-            for _ in range(num_chunks):
-                noise = (np.random.randint(-20000, 20000, chunk_size)).astype(np.int16).tobytes()
-                try:
-                    self.output_stream.write(noise)
-                except Exception as e:
-                    logging.debug(f"VOX carrier delay burst write failed: {e}")
-            
-                if self.output_stream_2:
+                for _ in range(num_chunks):
+                    noise = (np.random.randint(-20000, 20000, chunk_size)).astype(np.int16).tobytes()
                     try:
-                        self.output_stream_2.write(noise)
+                        self.output_stream.write(noise)
                     except Exception as e:
-                        logging.debug(f"VOX carrier delay burst write (output 2) failed: {e}")
-            
-                time.sleep(chunk_size / sample_rate)
+                        logging.debug(f"VOX carrier delay burst write failed: {e}")
+                
+                    if self.output_stream_2:
+                        try:
+                            self.output_stream_2.write(noise)
+                        except Exception as e:
+                            logging.debug(f"VOX carrier delay burst write (output 2) failed: {e}")
+                
+                    time.sleep(chunk_size / sample_rate)
 
         logging.info("Starting transmission")
 
@@ -462,8 +424,11 @@ class RepeaterController:
             except Exception as e:
                 logging.debug(f"ALSA prime (secondary) failed: {e}")
 
-        if self.config.config['repeater']['courtesy_tone_enabled']:
+        if self.config.config['repeater']['courtesy_tone_enabled'] and not self.skip_courtesy_tone:
             self.tone_player.play_courtesy_tone()
+        else:
+            if self.skip_courtesy_tone:
+                logging.debug("Skipping courtesy tone after CW ID.")
 
         fade_duration = 0.1
         sample_rate = self.config.config['audio']['sample_rate']
@@ -492,20 +457,13 @@ class RepeaterController:
         self.transmission_start_time = None
         self.tot_timer = 0
         self.last_transmission = time.time()
+        self.post_tx = True
+        self.skip_courtesy_tone = False
+        self.last_stop_time = time.time()
         logging.info("Transmission stopped with fade-out")
 
-        # Check if it’s time to ID
-        if self.config.config['identification']['cw_enabled']:
-            interval = self.config.config['identification']['interval_minutes'] * 60
-            if time.time() - self.last_id_time > interval:
-                logging.info("Sending CW ID after user transmission")
-                self.start_transmission()
-                self.play_audio_chunks(self.cw_audio)
-                self.transmitting = False
-                self.last_id_time = time.time()
-                logging.info("CW ID complete")
-
         self.ptt_manager.safe_ptt_unkey()
+        logging.info("Transmitter unkeyed.")
 
     def play_audio_chunks(self, audio):
         chunk_size = self.config.config['audio']['chunk_size']
@@ -514,4 +472,25 @@ class RepeaterController:
             if len(chunk) < chunk_size:
                 chunk = np.pad(chunk, (0, chunk_size - len(chunk)))
             self._send_pcm(chunk)
+
+    def send_id(self):
+        if self.transmitting or self.sending_id:
+            logging.warning("Unable to Send Manual ID: already transmitting")
+            return
+        
+        self.sending_id = True
+        self.skip_courtesy_tone = True
+        try:
+            callsign = self.config.config['identification']['callsign']
+            if self.config.config['identification']['cw_enabled']:
+                self.start_transmission()
+                cw_audio = self.morse.generate(callsign)
+                self.play_audio_chunks(cw_audio)
+                self.stop_transmission()
+                logging.info(f"Sent CW ID: {callsign}")
+        except Exception as e:
+            logging.error(f"ID failed: {e}")
+        finally:
+            self.last_id_time = time.time()
+            self.sending_id = False
 
