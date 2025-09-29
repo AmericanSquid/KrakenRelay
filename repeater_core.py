@@ -4,7 +4,8 @@ import threading
 import logging
 from scipy import signal
 from morse_code import MorseCode
-from ptt_controller import CM108PTT
+from ptt_controller import CM108PTT, PTTManager
+from tone_control import ToneGenerator, TonePlayer
 from audio_utils import check_clipping, limiter, apply_highpass_filter, calculate_db_level
 import os
 
@@ -17,56 +18,9 @@ class RepeaterController:
         # Core Configuration
         self.config = config
         self.audio_manager = audio_manager
+        self.ptt_manager = PTTManager(config)
         self.input_device = input_device
         self.output_device = output_device
-
-        # PTT Setup (dual + single + legacy)
-        ptt_cfg = config.config.get("ptt", {})
-        self.ptt = None
-        self.ptt_2 = None
-        self.ptt_mode = "NONE"
-
-        if ptt_cfg.get("dual_ptt", False):
-            # Dual PTT mode: read both
-            primary_cfg = ptt_cfg.get("primary", {})
-            secondary_cfg = ptt_cfg.get("secondary", {})
-
-            if primary_cfg.get("mode", "").upper() == "CM108":
-                self.ptt = CM108PTT(
-                    device=primary_cfg.get("device_path", "/dev/hidraw0"),
-                    pin=int(primary_cfg.get("gpio_pin", 3))
-                )
-                self.ptt_mode = "CM108"
-                logging.info(f"Primary PTT (CM108) on {self.ptt.device}, GPIO {self.ptt.pin}")
-            else:
-                self.ptt = None
-                logging.info("Primary PTT mode set to VOX (no GPIO control)")
-
-            if secondary_cfg.get("mode", "").upper() == "CM108":
-                self.ptt_2 = CM108PTT(
-                    device=secondary_cfg.get("device_path", "/dev/hidraw3"),
-                    pin=int(secondary_cfg.get("gpio_pin", 3))
-                )
-                logging.info(f"Secondary PTT (CM108) on {self.ptt_2.device}, GPIO {self.ptt_2.pin}")
-            else:
-                self.ptt = None
-                logging.info("Secondary PTT mode set to VOX (no GPIO control)")
-
-        else:
-            # Single PTT mode: check for new-style `primary` first, fallback to legacy
-            primary_cfg = ptt_cfg.get("primary", ptt_cfg)
-
-            if primary_cfg.get("mode", "").upper() == "CM108":
-                self.ptt = CM108PTT(
-                    device=primary_cfg.get("device_path", "/dev/hidraw0"),
-                    pin=int(primary_cfg.get("gpio_pin", 3))
-                )
-                self.ptt_mode = "CM108"
-                logging.info(f"PTT mode set to CM108 (device={self.ptt.device}, pin={self.ptt.pin})")
-            else:
-                self.ptt = None
-                logging.info("PTT mode set to VOX (no GPIO control)")
-
 
         # Audio Stream Set Up
         self.input_stream = None
@@ -98,9 +52,15 @@ class RepeaterController:
         # Thread Safety
         self.ptt_lock = threading.Lock()
 
-        # Generate Tones & Setup Streams
-        self.generate_courtesy_tone()
-        self.generate_tot_tone()
+        # Initialize Tone Control Module
+        self.tone_generator = ToneGenerator(self.config)
+        self.tone_player = TonePlayer(
+            config=self.config,
+            send_pcm_callable=self._send_pcm,
+            tx_state_callable=lambda: self.transmitting,
+            tone_generator=self.tone_generator
+        )
+
         self.setup_audio_streams()
         logging.info("RepeaterController initialized")
 
@@ -231,12 +191,12 @@ class RepeaterController:
                         self.transmitting = False
                         self.tot_timer = 0
                         self.last_transmission = time.time()
-                        self.safe_ptt_unkey()
+                        self.ptt_manager.safe_ptt_unkey()
                         self.last_id_time = time.time()
                         logging.info("Idle ID complete. Transmitter unkeyed.")
 
                 if consecutive_errors:
-                    logging.info("[Repeater] Audio loop recovered after %d error(s).", conseuctive_errors)
+                    logging.info("[Repeater] Audio loop recovered after %d error(s).", consecutive_errors)
                     consecutive_errors = 0
 
             except Exception as e:
@@ -265,9 +225,9 @@ class RepeaterController:
                 try:
                     self.stop_transmission()
                 except Exception:
-                    self.safe_ptt_unkey()
+                    self.ptt_manager.safe_ptt_unkey()
             else:
-                self.safe_ptt_unkey()
+                self.ptt_manager.safe_ptt_unkey()
         except Exception:
             logging.exception("[Repeater] Error while unkeying during shutdown.")
 
@@ -309,7 +269,7 @@ class RepeaterController:
             logging.warning(f"Failed to stop/close output stream 2: {e}")
 
         self.audio_manager.cleanup()
-        self.safe_ptt_unkey()
+        self.ptt_manager.safe_ptt_unkey()
         
         logging.info("Repeater controller stopped and cleaned up")
         logging.info(f"🧵 Active threads after cleanup: {threading.active_count()}")
@@ -367,12 +327,12 @@ class RepeaterController:
             
             if elapsed_time >= self.config.config['tot']['tot_time']:
                 logging.warning(f"TOT limit reached at {self.tot_timer:.1f} seconds")
-                self.play_tot_tone()
+                self.tone_player.play_tot_tone()
                 if self.config.config['tot']['tot_lockout_enabled']:
                     logging.info("TOT lockout activated")
                     self.tot_locked = True
                     self.lockout_start_time = time.time()
-                    self.safe_ptt_unkey()
+                    self.ptt_manager.safe_ptt_unkey()
                     self.transmitting = False
                     self.transmission_start_time = None
 
@@ -392,6 +352,15 @@ class RepeaterController:
 
     # ---------- unified TX funnel ----------   ← paste helper here
     def _send_pcm(self, pcm: np.ndarray):
+        # Step 1: Convert bytes or int16 to float32 for safety checks
+        if isinstance(pcm, bytes):
+            pcm = np.frombuffer(pcm, dtype=np.int16).astype(np.float32)
+        elif not isinstance(pcm, np.ndarray):
+            logging.error(f"_send_pcm received unsupported type: {type(pcm)}")
+            return
+        elif pcm.dtype != np.float32:
+            pcm = pcm.astype(np.float32)
+
         # Fix any NaNs/infs
         if np.isnan(pcm).any() or np.isinf(pcm).any():
             logging.warning("NaN/Inf in audio! Zeroing bad samples.")
@@ -439,50 +408,6 @@ class RepeaterController:
         finally:
             self.last_id_time = time.time()
 
-    def generate_courtesy_tone(self):
-        sample_rate = self.config.config['audio']['sample_rate']
-        duration = 0.12  # a little longer for clarity
-        frequency = 659
-
-        t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
-        tone = np.sin(2 * np.pi * frequency * t)
-
-        fade_len = int(sample_rate * 0.01)
-        fade = np.linspace(0, 1, fade_len)
-        tone[:fade_len] *= fade
-        tone[-fade_len:] *= fade[::-1]
-
-        self.courtesy_tone = (tone * 0.4 * 32767).astype(np.int16)
-        logging.info(f"Generated courtesy tone at {frequency} Hz")
-
-    def play_courtesy_tone(self):
-        if self.config.config['repeater']['courtesy_tone_enabled']:
-            self._send_pcm(self.courtesy_tone)
-            logging.info("Played courtesy tone")
-
-    def generate_tot_tone(self):
-        sample_rate = self.config.config['audio']['sample_rate']
-        duration = 1  # Duration of TOT warning tone in seconds
-    
-        # Generate a pure tone at configured frequency
-        t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
-        tone = np.sin(2 * np.pi * self.config.config['tot']['tot_tone_freq'] * t)
-    
-        # Apply fade-in and fade-out
-        fade_len = int(sample_rate * 0.01)  # 10ms fade
-        fade = np.linspace(0, 1, fade_len)
-        tone[:fade_len] *= fade
-        tone[-fade_len:] *= fade[::-1]
-    
-        # Convert to 16-bit PCM
-        self.tot_tone = (tone * 32767).astype(np.int16)
-        logging.info(f"Generated TOT tone at {self.config.config['tot']['tot_tone_freq']}Hz")
-
-    def play_tot_tone(self):
-        if self.transmitting:
-            self._send_pcm(self.tot_tone)
-            logging.info("Played TOT warning tone") 
-
     #----------------------#
     # Transmission Control #
     #----------------------#
@@ -496,7 +421,7 @@ class RepeaterController:
         self.transmission_start_time = time.time()
         self.tot_timer = 0
 
-        self.safe_ptt_key()
+        self.ptt_manager.safe_ptt_key()
 
         #if self.ptt_mode!= 'CM108':
         delay_sec = self.config.config['repeater']['carrier_delay']
@@ -538,7 +463,7 @@ class RepeaterController:
                 logging.debug(f"ALSA prime (secondary) failed: {e}")
 
         if self.config.config['repeater']['courtesy_tone_enabled']:
-            self.play_courtesy_tone()
+            self.tone_player.play_courtesy_tone()
 
         fade_duration = 0.1
         sample_rate = self.config.config['audio']['sample_rate']
@@ -580,7 +505,7 @@ class RepeaterController:
                 self.last_id_time = time.time()
                 logging.info("CW ID complete")
 
-        self.safe_ptt_unkey()
+        self.ptt_manager.safe_ptt_unkey()
 
     def play_audio_chunks(self, audio):
         chunk_size = self.config.config['audio']['chunk_size']
@@ -589,142 +514,4 @@ class RepeaterController:
             if len(chunk) < chunk_size:
                 chunk = np.pad(chunk, (0, chunk_size - len(chunk)))
             self._send_pcm(chunk)
-    
-    ################
-    # Keying Logic #
-    ################
 
-    def safe_ptt_key(self):
-        primary_success = False
-        secondary_success = False
-
-        # PRIMARY PTT
-        if self.ptt_mode == "CM108" and self.ptt:
-            try:
-                if getattr(self.ptt, "working", True):
-                    self.ptt.key()
-                    primary_success = True
-            except Exception as e:
-                logging.error(f"Primary PTT key error: {e}")
-                self.ptt = None
-                self.ptt_mode = "VOX"
-                self.ptt_fallback = True
-                logging.warning("Primary PTT failed — fallback to VOX")
-
-        # SECONDARY PTT
-        if getattr(self, "ptt_2_mode", "CM108") == "CM108" and self.ptt_2:
-            try:
-                if getattr(self.ptt_2, "working", True):
-                    self.ptt_2.key()
-                    secondary_success = True
-            except Exception as e:
-                logging.error(f"Secondary PTT key error: {e}")
-                self.ptt_2 = None
-                self.ptt_2_mode = "VOX"
-                self.ptt_2_fallback = True
-                logging.warning("Secondary PTT failed — fallback to VOX")
-
-        return primary_success or secondary_success
-
-    def safe_ptt_unkey(self):
-        primary_success = False
-        secondary_success = False
-
-        if self.ptt_mode == "CM108" and self.ptt:
-            try:
-                if getattr(self.ptt, "working", True):
-                    self.ptt.unkey()
-                    primary_success = True
-            except Exception as e:
-                logging.error(f"Primary PTT unkey error: {e}")
-                self.ptt = None
-                self.ptt_mode = "VOX"
-                self.ptt_fallback = True
-                logging.warning("Primary PTT unkey failed — fallback to VOX")
-
-        if getattr(self, "ptt_2_mode", "CM108") == "CM108" and self.ptt_2:
-            try:
-                if getattr(self.ptt_2, "working", True):
-                    self.ptt_2.unkey()
-                    secondary_success = True
-            except Exception as e:
-                logging.error(f"Secondary PTT unkey error: {e}")
-                self.ptt_2 = None
-                self.ptt_2_mode = "VOX"
-                self.ptt_2_fallback = True
-                logging.warning("Secondary PTT unkey failed — fallback to VOX")
-
-        return primary_success or secondary_success
-    
-    def get_ptt_status(self):
-        ptt_cfg = self.config.config.get("ptt", {})
-        dual_mode = ptt_cfg.get("dual_ptt", False)
-
-        statuses = []
-
-        # Determine where to look for primary PTT config
-        primary_cfg = ptt_cfg.get("primary", ptt_cfg)
-        device1 = primary_cfg.get("device_path", "/dev/hidraw0")
-        mode1 = primary_cfg.get("mode", "NONE").upper()
-
-        if self.ptt:
-            if not os.path.exists(device1):
-                statuses.append((f"Primary: Device Missing ({device1})", "red"))
-            else:
-                try:
-                    with open(device1, "wb", buffering=0):
-                        pass
-                    if getattr(self.ptt, "working", True):
-                        statuses.append((f"Primary: OK ({device1})", "green"))
-                    else:
-                        statuses.append((f"Primary: Detected, Last Op Failed ({device1})", "orange"))
-                except PermissionError:
-                    statuses.append((f"Primary: Permission Denied ({device1})", "orange"))
-                except Exception:
-                    statuses.append((f"Primary: Unusable ({device1})", "orange"))
-        else:
-            if mode1 == "CM108":
-                statuses.append((f"Primary: Not Configured ({device1})", "red"))
-            else:
-                statuses.append(("Primary: VOX Mode", "blue"))
-
-        # If not dual PTT, return now
-        if not dual_mode:
-            return statuses[0]
-
-        # Check secondary
-        secondary_cfg = ptt_cfg.get("secondary", {})
-        device2 = secondary_cfg.get("device_path", "/dev/hidraw1")
-        mode2 = secondary_cfg.get("mode", "NONE").upper()
-
-        if self.ptt_2:
-            if not os.path.exists(device2):
-                statuses.append((f"Secondary: Device Missing ({device2})", "red"))
-            else:
-                try:
-                    with open(device2, "wb", buffering=0):
-                        pass
-                    if getattr(self.ptt_2, "working", True):
-                        statuses.append((f"Secondary: OK ({device2})", "green"))
-                    else:
-                        statuses.append((f"Secondary: Detected, Last Op Failed ({device2})", "orange"))
-                except PermissionError:
-                    statuses.append((f"Secondary: Permission Denied ({device2})", "orange"))
-                except Exception:
-                    statuses.append((f"Secondary: Unusable ({device2})", "orange"))
-        else:
-            if mode2 == "CM108":
-                statuses.append((f"Secondary: Not Configured ({device2})", "red"))
-            else:
-                statuses.append(("Secondary: VOX Mode", "blue"))
-
-        # Combine both into one string for GUI
-        combined_status = " | ".join([s[0] for s in statuses])
-        color = "green"
-        if any(c == "red" for _, c in statuses):
-            color = "red"
-        elif any(c == "orange" for _, c in statuses):
-            color = "orange"
-        elif all(c == "blue" for _, c in statuses):
-            color = "blue"
-        return (combined_status, color)

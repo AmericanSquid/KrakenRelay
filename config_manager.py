@@ -49,7 +49,8 @@ class ConfigManager:
                 'tail_time': 2.0,
                 'anti_kerchunk_time': 0,
                 'carrier_delay': 0,
-                'courtesy_tone_enabled': True
+                'courtesy_tone_enabled': True,
+                'courtesy_tone_volume': 0.5
             },
             'identification': {
                 'interval_minutes': 10,
@@ -62,6 +63,7 @@ class ConfigManager:
             'tot': {
                 'tot_enabled': True,
                 'tot_time': 180,
+                'tot_volume': 0.5,
                 'tot_lockout_enabled': True,
                 'tot_lockout_time': 5,
                 'tot_tone_freq': 1200

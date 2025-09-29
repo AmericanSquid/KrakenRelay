@@ -6,6 +6,7 @@ from PyQt5.QtCore import Qt, QTimer
 import numpy as np
 from dialogs.ptt import PTTDialog
 from audio_manager import AudioDeviceError
+from ptt_controller import PTTManager
 
 class RepeaterUI(QMainWindow):
     def __init__(self, config, audio_manager):
@@ -604,7 +605,7 @@ class RepeaterUI(QMainWindow):
             self.ptt_status_label.setStyleSheet(f"color: {COLOR_MAP['gray']}; font-weight: normal;")
             return
 
-        status, color = self.controller.get_ptt_status()
+        status, color = self.ptt_manager.get_ptt_status()
         emoji = EMOJI_MAP.get(color, "⚪")
         css_color = COLOR_MAP.get(color, COLOR_MAP["gray"])
         self.ptt_status_label.setText(f"{emoji} {status}")
