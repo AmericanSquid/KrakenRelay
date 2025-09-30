@@ -5,7 +5,8 @@ import logging
 from morse_code import ScheduleID
 from ptt_controller import PTTManager
 from tone_control import ToneGenerator, TonePlayer
-from audio_utils import check_clipping, limiter, apply_highpass_filter, calculate_db_level
+from tot_manager import TOTManager
+from audio_utils import check_clipping, limiter, apply_highpass_filter, calculate_db_level, check_squelch
 
 class RepeaterController:
 
@@ -17,8 +18,10 @@ class RepeaterController:
         self.config = config
         self.audio_manager = audio_manager
         self.ptt_manager = PTTManager(config)
+        self.tot_manager = TOTManager(config, self.ptt_manager.safe_ptt_unkey)
         self.input_device = input_device
         self.output_device = output_device
+        
 
         # Audio Stream Set Up
         self.input_stream = None
@@ -28,10 +31,7 @@ class RepeaterController:
         # State Tracking & Timing
         self.running = False
         self.transmitting = False
-        self.tot_timer = 0
-        self.tot_locked = False
-        self.transmission_start_time = None
-        self.squelch_open_time = None
+        self.tot_manager.reset()
         self.last_audio_time = time.time()
         self.last_transmission = time.time()
         self.current_rms = 0
@@ -46,9 +46,6 @@ class RepeaterController:
             set_skip_courtesy_fn=lambda: setattr(self, "skip_courtesy_tone", True)
         )
         self.skip_courtesy_tone = False
-
-        # Thread Safety
-        self.ptt_lock = threading.Lock()
 
         # Tone Control Setup
         self.tone_generator = ToneGenerator(self.config)
@@ -150,14 +147,9 @@ class RepeaterController:
         logging.info("[Repeater] Audio thread started.")
 
         while self.running:
-            if self.tot_locked:
-                lockout_time = self.config.config['tot'].get('tot_lockout_time', 180)
-                if time.time() - self.lockout_start_time > lockout_time:
-                    self.tot_locked = False
-                    logging.info("🔓 TOT lockout released")
+            self.tot_manager.check_lockout_expired()
             try:
                 self.process_audio()
-
                 self.schedule_id.check_and_send()
                             
                 if consecutive_errors:
@@ -167,6 +159,9 @@ class RepeaterController:
             except Exception as e:
                 consecutive_errors += 1
                 logging.error(f"Error in audio loop: {e}")
+
+                if not self.running:
+                    break
 
                 # Backoff before retrying
                 backoff = min(0.2 * (2 ** (consecutive_errors - 1)), max_backoff)
@@ -202,16 +197,16 @@ class RepeaterController:
         logging.info("Cleaning up repeater controller...")
         self.running = False # Stop the loop
 
-        if hasattr(self, 'audio_thread'):
-            self.audio_thread.join(timeout=1.0) # Ensure thread stops safely
-           
+        # Join AFTER stopping streams
+        if hasattr(self, "audio_thread"):
+            self.audio_thread.join(timeout=2.0)
             if self.audio_thread.is_alive():
                 logging.warning("[Repeater] Audio thread did not terminate after join().")
-            else:
-                logging.info("[Repeater] Audio thread stopped cleanly.") 
+                return  # <-- CRUCIAL: DO NOT TOUCH STREAMS OR TERMINATE PORTAUDIO
 
-        logging.info("[Repeater] Cleaning up audio streams.")
+            logging.info("[Repeater] Cleaning up audio streams.")
 
+        # Closing streams
         try:
             if self.input_stream:
                 self.input_stream.stop_stream()
@@ -244,18 +239,14 @@ class RepeaterController:
     #-----------------------#
     # Core Audio Processing #
     #-----------------------#
-    def check_squelch(self, samples):
-        db_level = 20 * np.log10(np.sqrt(np.mean(samples**2)) / 32767)
-        return db_level > self.config.config['audio']['squelch_threshold']
-
     def process_audio(self):
         data = self.input_stream.read(self.config.config['audio']['chunk_size'], exception_on_overflow=False)
         samples = np.frombuffer(data, dtype=np.int16).astype(np.float32)
         self.current_rms = calculate_db_level(samples)
-        chunk  = self.config.config['audio']['chunk_size']
 
         # Check squelch first
-        if self.check_squelch(samples):
+        squelch_threshold = self.config.config['audio']['squelch_threshold']
+        if check_squelch(samples, squelch_threshold):
             # Process audio chain
             if self.config.config['audio'].get('highpass_enabled', True):
                 samples = apply_highpass_filter(
@@ -286,23 +277,10 @@ class RepeaterController:
                     except Exception as e:
                         logging.debug(f"Silence write (secondary) failed (non-fatal): {e}")
     def handle_transmission(self, samples):
-        if self.config.config['tot']['tot_enabled'] and self.transmission_start_time:
-            elapsed_time = time.time() - self.transmission_start_time
-            self.tot_timer = elapsed_time
-            
-            if elapsed_time >= self.config.config['tot']['tot_time']:
-                logging.warning(f"TOT limit reached at {self.tot_timer:.1f} seconds")
-                self.tone_player.play_tot_tone()
-                if self.config.config['tot']['tot_lockout_enabled']:
-                    logging.info("TOT lockout activated")
-                    self.tot_locked = True
-                    self.lockout_start_time = time.time()
-                    self.ptt_manager.safe_ptt_unkey()
-                    self.transmitting = False
-                    self.transmission_start_time = None
-
-                self.stop_transmission()
-                return   
+        if self.tot_manager.check_timeout(self.transmitting):
+            self.tone_player.play_tot_tone()
+            self.stop_transmission()
+            return
 
         if not self.transmitting:
             self.start_transmission()
@@ -358,13 +336,13 @@ class RepeaterController:
     #----------------------#
 
     def start_transmission(self):
-        if self.tot_locked:
-            logging.warning("Attempted to start transmission during TOT lockout. Blocking.")
+        if self.tot_manager.is_locked():
             return
-
         self.transmitting = True
         self.transmission_start_time = time.time()
-        self.tot_timer = 0
+        self.tot_manager.reset()
+        self.tot_manager.tx_start_time = time.time()
+
 
         self.ptt_manager.safe_ptt_key()
 
@@ -438,7 +416,8 @@ class RepeaterController:
         
         self.transmitting = False
         self.transmission_start_time = None
-        self.tot_timer = 0
+        self.tot_manager.reset()
+        self.tot_manager.tx_start_time = None
         self.last_transmission = time.time()
 
         logging.info("Transmission stopped with fade-out")

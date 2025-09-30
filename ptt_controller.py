@@ -60,6 +60,7 @@ class PTTManager:
                 logging.info(f"Primary PTT (CM108) on {self.ptt.device}, GPIO {self.ptt.pin}")
             else:
                 self.ptt = None
+                self.ptt_mode = "VOX"
                 logging.info("Primary PTT mode set to VOX (no GPIO control)")
 
             if secondary_cfg.get("mode", "").upper() == "CM108":
@@ -67,9 +68,11 @@ class PTTManager:
                     device=secondary_cfg.get("device_path", "/dev/hidraw3"),
                     pin=int(secondary_cfg.get("gpio_pin", 3))
                 )
+                self.ptt_mode_2 = "CM108"
                 logging.info(f"Secondary PTT (CM108) on {self.ptt_2.device}, GPIO {self.ptt_2.pin}")
             else:
-                self.ptt = None
+                self.ptt_2 = None
+                self.ptt_2_mode = "VOX"
                 logging.info("Secondary PTT mode set to VOX (no GPIO control)")
 
         else:
@@ -85,6 +88,7 @@ class PTTManager:
                 logging.info(f"PTT mode set to CM108 (device={self.ptt.device}, pin={self.ptt.pin})")
             else:
                 self.ptt = None
+                self.ptt_mode = "VOX"
                 logging.info("PTT mode set to VOX (no GPIO control)")
 
     def safe_ptt_key(self):
@@ -105,7 +109,7 @@ class PTTManager:
                 logging.warning("Primary PTT failed — fallback to VOX")
 
         # SECONDARY PTT
-        if getattr(self, "ptt_2_mode", "CM108") == "CM108" and self.ptt_2:
+        if getattr(self, "ptt_2_mode", "NONE") == "CM108" and self.ptt_2:
             try:
                 if getattr(self.ptt_2, "working", True):
                     self.ptt_2.key()
@@ -135,7 +139,7 @@ class PTTManager:
                 self.ptt_fallback = True
                 logging.warning("Primary PTT unkey failed — fallback to VOX")
 
-        if getattr(self, "ptt_2_mode", "CM108") == "CM108" and self.ptt_2:
+        if getattr(self, "ptt_2_mode", "NONE") == "CM108" and self.ptt_2:
             try:
                 if getattr(self.ptt_2, "working", True):
                     self.ptt_2.unkey()

@@ -59,6 +59,6 @@ class TonePlayer:
             logging.info("Played courtesy tone")
 
     def play_tot_tone(self):
-        if self.transmitting:
+        if self.is_transmitting:
             self._send_pcm(self.tot_tone)
             logging.info("Played TOT warning tone") 

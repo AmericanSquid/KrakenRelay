@@ -1,9 +1,5 @@
 import pyaudio
-import numpy as np
 import logging
-from scipy.signal import butter, lfilter
-from collections import deque
-import threading
 
 class AudioDeviceManager:
     def __init__(self):
