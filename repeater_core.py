@@ -195,6 +195,7 @@ class RepeaterController:
 
     def cleanup(self):
         logging.info("Cleaning up repeater controller...")
+        self.stop_transmission()
         self.running = False # Stop the loop
 
         # Join AFTER stopping streams
@@ -229,8 +230,7 @@ class RepeaterController:
             logging.warning(f"Failed to stop/close output stream 2: {e}")
 
         self.audio_manager.cleanup()
-        self.ptt_manager.safe_ptt_unkey()
-        
+                
         logging.info("Repeater controller stopped and cleaned up")
         logging.info(f"🧵 Active threads after cleanup: {threading.active_count()}")
         for t in threading.enumerate():
