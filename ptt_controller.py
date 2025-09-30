@@ -6,6 +6,7 @@ class CM108PTT:
         self.device = device
         self.pin = pin
         self.working = True
+        logging.debug(f"[CM108PTT] Initialized PTT on {self.device}, GPIO pin {self.pin}")
 
     def _set_gpio(self, state):
         if not 1 <= self.pin <= 8:
@@ -43,8 +44,8 @@ class PTTManager:
         ptt_cfg = self.config.config.get("ptt", {})
         self.ptt = None
         self.ptt_2 = None
-        self.ptt_mode = "NONE"
-        self.ptt_2_mode = "NONE"
+        self.ptt_mode = "VOX"
+        self.ptt_2_mode = "VOX"
 
         if ptt_cfg.get("dual_ptt", False):
         # Dual PTT mode: read both
@@ -68,12 +69,14 @@ class PTTManager:
                     device=secondary_cfg.get("device_path", "/dev/hidraw3"),
                     pin=int(secondary_cfg.get("gpio_pin", 3))
                 )
-                self.ptt_mode_2 = "CM108"
+                self.ptt_2_mode = "CM108"
                 logging.info(f"Secondary PTT (CM108) on {self.ptt_2.device}, GPIO {self.ptt_2.pin}")
             else:
                 self.ptt_2 = None
                 self.ptt_2_mode = "VOX"
                 logging.info("Secondary PTT mode set to VOX (no GPIO control)")
+            logging.info(f"[PTT] init secondary: mode={self.ptt_2_mode}, dev={getattr(self.ptt_2,'device',None)}, pin={getattr(self.ptt_2,'pin',None)}")
+
 
         else:
         # Single PTT mode: check for new-style `primary` first, fallback to legacy
@@ -113,6 +116,7 @@ class PTTManager:
             try:
                 if getattr(self.ptt_2, "working", True):
                     self.ptt_2.key()
+                    logging.info("Secondary PTT keyed")
                     secondary_success = True
             except Exception as e:
                 logging.error(f"Secondary PTT key error: {e}")
