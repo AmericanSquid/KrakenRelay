@@ -72,7 +72,7 @@ class ScheduleID:
             interval = self.config.config['identification']['interval_minutes'] * 60
             should_id = time.time() - self.last_id_time > interval
 
-            if should_id and self.post_tx and not self.sending_id:
+            if should_id and (self.post_tx or not self.sending_id):
                 if time.time() - self.last_stop_time > self.cooldown:
                     if self.post_tx:
                         logging.info("Sending CW ID after user transmission.")

@@ -1,40 +1,40 @@
 audio:
-  sample_rate: 48000
-  chunk_size: 1024
-  squelch_threshold: -40
-  highpass_enabled: true
+  chunk_size: 960
   highpass_cutoff: 300
+  highpass_enabled: true
   limiter_enabled: true
   limiter_threshold: 0.85
-  dual_output: false
-  output_device: None
-repeater:
-  tail_time: 2.0
-  anti_kerchunk_time: 0
-  carrier_delay: 0
-  courtesy_tone_enabled: true
-  courtesy_tone_volume: 0.5
+  sample_rate: 48000
+  squelch_threshold: -40
+  dual_output: true
+  output_device_2: 0
 identification:
-  interval_minutes: 10
   cw_enabled: true
-  callsign: KR4KEN
+  callsign: WB3DZO
   cw_pitch: 523
   cw_wpm: 20
-  cw_volume: 0.5
+  cw_volume: 0.4
+  interval_minutes: 10
+ptt:
+  dual_ptt: true
+  primary:
+    #device_path: /dev/hidraw0
+    #gpio_pin: 3
+    mode: VOX
+  secondary:
+    mode: CM108
+    gpio_pin: 3
+    device_path: /dev/hidraw3
+repeater:
+  anti_kerchunk_time: 0
+  carrier_delay: 0.3
+  courtesy_tone_enabled: true
+  courtesy_tone_volume: 0.4
+  tail_time: 2.0
 tot:
   tot_enabled: true
-  tot_time: 180
   tot_volume: 0.5
   tot_lockout_enabled: true
   tot_lockout_time: 5
+  tot_time: 10
   tot_tone_freq: 1200
-ptt:
-  dual_ptt: false
-  primary:
-    mode: CM108
-    device_path: /dev/hidraw0
-    gpio_pin: 3
-  #secondary:
-  #    mode: CM108
-  #    device_path: /dev/hidraw0
-  #    gpio_pin: 3

@@ -75,6 +75,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="List available audio devices and exit.",
     )
+    parser.add_argument(
+    "--gui",
+    action="store_true",
+    help="Launch GUI instead of headless",
+    )
     return parser.parse_args()
 
 #--------------#
@@ -178,7 +183,7 @@ def run_headless(args: argparse.Namespace) -> None:
 #------------#
 # GUI runner #
 #------------#
-def run_gui() -> None:
+def run_gui(args: argparse.Namespace) -> None:
     global app, QApplication, RepeaterUI
     try:
         from PyQt5.QtWidgets import QApplication
@@ -210,10 +215,10 @@ def main() -> None:
         list_audio_devices()
         sys.exit(0)   # <- Make sure to exit before GUI or repeater code!
 
-    if args.headless:
-        run_headless(args)
+    if args.gui:
+        run_gui(args)
     else:
-        run_gui()
+        run_headless(args)
 
 
 if __name__ == "__main__":
