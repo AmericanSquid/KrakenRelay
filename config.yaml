@@ -10,42 +10,46 @@ audio:
   dual_output: false
   highpass_cutoff: 300
   highpass_enabled: true
-  input_index: 2
+  input_index: 0
   limiter_enabled: true
   limiter_threshold: 0.85
   output_device_2: 0
-  output_index: 1
+  output_index: 0
   sample_rate: 48000
   squelch_hang_time: 0.5
   squelch_hysteresis_db: 20.0
   squelch_threshold: -40
+
 identification:
-  callsign: K3AYV
+  callsign: N0CALL
   cw_enabled: true
   cw_pitch: 523
   cw_volume: 50
   cw_wpm: 20
   interval_minutes: 10
+
 ptt:
   device_path: ''
   dual_ptt: false
   gpio_pin: 3
   mode: VOX
   primary:
-    device_path: /dev/hidraw0
+    device_path: /dev/hidrawX
     gpio_pin: '3'
     mode: VOX
   secondary:
-    device_path: /dev/hidraw3
+    device_path: /dev/hidrawY
     gpio_pin: '3'
     mode: VOX
+
 repeater:
   anti_kerchunk_time: 0.25
-  auto_start: true
+  auto_start: false
   carrier_delay: 0.35
   courtesy_tone_enabled: false
   courtesy_tone_volume: 100
   tail_time: 2.0
+
 tot:
   tot_enabled: true
   tot_lockout_enabled: true
