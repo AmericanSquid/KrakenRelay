@@ -15,6 +15,7 @@ class TOTManager:
         self.timer_start = None
         self.lockout_start = None
         self._locked = False
+        self._last_tot_log = 0.0
 
     def reset(self):
         self.timer_start = time.time()
@@ -35,7 +36,10 @@ class TOTManager:
             return False
 
         elapsed = time.time() - self.tx_start_time
-        logging.debug(f"TOT: elapsed={elapsed:.1f}s / limit={self.tot_limit}s")
+        now = time.time()
+        if now - self._last_tot_log >= 1.0:
+            logging.debug(f"TOT: elapsed={elapsed:.1f}s / limit={self.tot_limit}s")
+            self._last_tot_log = now
         if elapsed >= self.tot_limit:
             logging.warning(f"TOT limit reached at {elapsed:.1f} seconds")
 

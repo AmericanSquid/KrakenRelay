@@ -1,40 +1,55 @@
 audio:
   chunk_size: 960
+  compressor_strength: 50
+  compressor_attack_ms: 10
+  compressor_enabled: true
+  compressor_makeup_db: 3
+  compressor_ratio: 3.0
+  compressor_release_ms: 200
+  compressor_threshold_db: -18
+  dual_output: false
   highpass_cutoff: 300
   highpass_enabled: true
+  input_index: 2
   limiter_enabled: true
   limiter_threshold: 0.85
-  sample_rate: 48000
-  squelch_threshold: -40
-  dual_output: true
   output_device_2: 0
+  output_index: 1
+  sample_rate: 48000
+  squelch_hang_time: 0.5
+  squelch_hysteresis_db: 20.0
+  squelch_threshold: -40
 identification:
+  callsign: K3AYV
   cw_enabled: true
-  callsign: WB3DZO
   cw_pitch: 523
+  cw_volume: 50
   cw_wpm: 20
-  cw_volume: 0.4
   interval_minutes: 10
 ptt:
-  dual_ptt: true
+  device_path: ''
+  dual_ptt: false
+  gpio_pin: 3
+  mode: VOX
   primary:
-    #device_path: /dev/hidraw0
-    #gpio_pin: 3
+    device_path: /dev/hidraw0
+    gpio_pin: '3'
     mode: VOX
   secondary:
-    mode: CM108
-    gpio_pin: 3
     device_path: /dev/hidraw3
+    gpio_pin: '3'
+    mode: VOX
 repeater:
-  anti_kerchunk_time: 0
-  carrier_delay: 0.3
-  courtesy_tone_enabled: true
-  courtesy_tone_volume: 0.4
+  anti_kerchunk_time: 0.25
+  auto_start: true
+  carrier_delay: 0.35
+  courtesy_tone_enabled: false
+  courtesy_tone_volume: 100
   tail_time: 2.0
 tot:
   tot_enabled: true
-  tot_volume: 0.5
   tot_lockout_enabled: true
-  tot_lockout_time: 5
-  tot_time: 10
+  tot_lockout_time: 15.0
+  tot_time: 180.0
   tot_tone_freq: 1200
+  tot_volume: 100

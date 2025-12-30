@@ -1,51 +1,62 @@
 import numpy as np
 import logging
 import time
+from tone_control import _tone_vol
+
+MORSE_CODE = {
+    'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.',
+    'F': '..-.', 'G': '--.', 'H': '....', 'I': '..', 'J': '.---',
+    'K': '-.-', 'L': '.-..', 'M': '--', 'N': '-.', 'O': '---',
+    'P': '.--.', 'Q': '--.-', 'R': '.-.', 'S': '...', 'T': '-',
+    'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-', 'Y': '-.--',
+    'Z': '--..', '0': '-----', '1': '.----', '2': '..---', '3': '...--',
+    '4': '....-', '5': '.....', '6': '-....', '7': '--...', '8': '---..',
+    '9': '----.'
+}
 
 class MorseCode:
-    MORSE_CODE = {
-        'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.',
-        'F': '..-.', 'G': '--.', 'H': '....', 'I': '..', 'J': '.---',
-        'K': '-.-', 'L': '.-..', 'M': '--', 'N': '-.', 'O': '---',
-        'P': '.--.', 'Q': '--.-', 'R': '.-.', 'S': '...', 'T': '-',
-        'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-', 'Y': '-.--',
-        'Z': '--..', '0': '-----', '1': '.----', '2': '..---', '3': '...--',
-        '4': '....-', '5': '.....', '6': '-....', '7': '--...', '8': '---..',
-        '9': '----.'
-    }
-
     def __init__(self, wpm=20, frequency=800, sample_rate=8000, volume=0.5):
-        self.dot_length = int(1.2 / wpm * sample_rate)
-        self.dash_length = self.dot_length * 3
-        self.frequency = frequency
+        self.dot_len = int(1.2 / wpm * sample_rate)
+        self.dash_len = self.dot_len * 3
         self.sample_rate = sample_rate
+        self.frequency = frequency
         self.volume = volume
+        self._intra = np.zeros(self.dot_len, dtype=np.int16)
+        self._inter_char = np.zeros(self.dot_len * 2, dtype=np.int16)
 
-    def generate(self, text):
-        t = np.arange(self.dot_length) / self.sample_rate
-        dot = np.sin(2 * np.pi * self.frequency * t)
-        dash = np.sin(2 * np.pi * self.frequency * np.arange(self.dash_length) / self.sample_rate)
-        
-        output = np.array([])
-        space = np.zeros(self.dot_length)
-        
+    def tone(self, length):
+        t = np.arange(length) / self.sample_rate
+        return (np.sin(2 * np.pi * self.frequency * t) * self.volume * 32767).astype(np.int16)
+
+    def silence(self, length):
+        return np.zeros(length, dtype=np.int16)
+
+    def generate_chunks(self, text, chunk_size):
+        """Yield int16 PCM chunks suitable for real-time playback."""
         for char in text.upper():
-            if char in self.MORSE_CODE:
-                for symbol in self.MORSE_CODE[char]:
-                    output = np.append(output, dot if symbol == '.' else dash)
-                    output = np.append(output, space)
-                output = np.append(output, space * 2)
-                
-        return (output * self.volume * 32767).astype(np.int16)
+            if char not in MORSE_CODE:
+                continue
+            for symbol in MORSE_CODE[char]:
+                tone = self.tone(self.dot_len if symbol == "." else self.dash_len)
+                yield from self._chunk(tone, chunk_size)
+                # Intra-symbol space
+                yield from self._chunk(self._intra, chunk_size)
+            # Inter-letter space
+            yield from self._chunk(self._inter_char, chunk_size)
+
+    def _chunk(self, data, chunk_size):
+        for i in range(0, len(data), chunk_size):
+            chunk = data[i:i + chunk_size]
+            yield chunk
     
 class ScheduleID:
-    def __init__(self, config, tx_start_fn, tx_stop_fn, send_pcm_fn, tx_state_fn, set_skip_courtesy_fn):
+    def __init__(self, controller, config, tx_start_fn, tx_stop_fn, send_pcm_fn, tx_state_fn, set_skip_courtesy_fn):
         self.config = config
         self.morse = MorseCode(
             wpm=config.config['identification']['cw_wpm'],
             frequency=config.config['identification']['cw_pitch'],
             sample_rate=config.config['audio']['sample_rate'],
-            volume=config.config['identification']['cw_volume']
+            volume=_tone_vol(config.config['identification'].get('cw_volume', 100))
             )
         self.tx_start = tx_start_fn
         self.tx_stop = tx_stop_fn
@@ -57,7 +68,7 @@ class ScheduleID:
         self.sending_id = False
         self.last_stop_time = time.time()
         self.cooldown = 0.25
-
+        self.controller = controller
 
     def mark_post_tx(self):
         self.post_tx = True
@@ -91,11 +102,7 @@ class ScheduleID:
         try:
             callsign = self.config.config['identification']['callsign']
             if self.config.config['identification']['cw_enabled']:
-                self.tx_start()
-                cw_audio = self.morse.generate(callsign)
-                self.send_pcm(cw_audio)
-                self.set_skip_courtesy()
-                self.tx_stop()
+                self.controller.start_cw_id(callsign)
                 logging.info(f"Sent CW ID: {callsign}")
         except Exception as e:
             logging.error(f"ID failed: {e}")

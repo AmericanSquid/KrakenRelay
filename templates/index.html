@@ -1,0 +1,1425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>KrakenRelay Repeater Controller</title>
+
+  <style>
+    :root{
+      --bg: #14151a;
+      --panel: #1b1d24;
+      --panel2: #161821;
+      --border: #2a2d3a;
+      --text: #ffffff;
+      --muted: #b7bac4;
+
+      --accent: #a259ff;
+      --accent2: #37fff8;
+
+      --ok: #3dff47;
+      --warn: #ffcc33;
+      --bad: #ff5252;
+
+      --shadow: 0 10px 28px rgba(0,0,0,.35);
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(1200px 600px at 20% 0%, rgba(162,89,255,.18), transparent 60%),
+                  radial-gradient(900px 500px at 95% 10%, rgba(55,255,248,.12), transparent 55%),
+                  var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      line-height: 1.35;
+    }
+
+    /* Header */
+    .topbar{
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+      background: rgba(20,21,26,.65);
+      backdrop-filter: blur(10px);
+    }
+    .topbar-inner{
+      max-width: 1200px;
+      margin: 0 auto;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 14px;
+    }
+    .brand{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+    }
+    .logo{
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, rgba(162,89,255,1), rgba(55,255,248,1));
+      box-shadow: 0 0 18px rgba(162,89,255,.3);
+    }
+    .brand h1{
+      margin:0;
+      font-size: 16px;
+      letter-spacing: .2px;
+    }
+    .brand .sub{
+      display:block;
+      margin-top: 2px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .status-pills{
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content:flex-end;
+    }
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.20);
+      color: var(--muted);
+      font-size: 12px;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.03);
+    }
+
+    /* Lights */
+    .dot{
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #575a66;
+      box-shadow: none;
+    }
+    .dot.rx.on{
+      background: var(--ok);
+      box-shadow: 0 0 14px rgba(61,255,71,.55);
+    }
+    .dot.tx.on{
+      background: var(--bad);
+      box-shadow: 0 0 14px rgba(255,82,82,.55);
+    }
+
+    /* Layout */
+    .wrap{
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: 380px 1fr;
+      gap: 14px;
+      align-items:start;
+    }
+    @media (max-width: 980px){
+      .grid{ grid-template-columns: 1fr; }
+    }
+
+    /* Cards */
+    .card{
+      border: 1px solid rgba(255,255,255,.09);
+      background: linear-gradient(180deg, rgba(27,29,36,.92), rgba(22,24,33,.92));
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .card-hd{
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255,255,255,.07);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 12px;
+    }
+    .card-hd h2{
+      margin:0;
+      font-size: 13px;
+      letter-spacing: .2px;
+      color: rgba(255,255,255,.92);
+    }
+    .card-bd{
+      padding: 14px;
+    }
+
+    /* Sticky sidebar (desktop) */
+    .sidebar{
+      position: sticky;
+      top: 86px; /* account for sticky header */
+      align-self: start;
+    }
+    @media (max-width: 980px){
+      .sidebar{ position: static; }
+    }
+
+    /* Header controls in config card */
+    .hdr-controls{
+      display:flex;
+      align-items:center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content:flex-end;
+    }
+    .lockpill{
+      cursor: pointer;
+      user-select: none;
+    }
+    .lockpill input{
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      accent-color: rgba(55,255,248,.9);
+    }
+    .mini-btn{
+      padding: 7px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+    }
+    .pill.warn{
+      border-color: rgba(255,204,51,.35);
+      color: rgba(255,204,51,.95);
+    }
+    .pill.ok{
+      border-color: rgba(61,255,71,.28);
+      color: rgba(61,255,71,.95);
+    }
+    .pill.bad{
+      border-color: rgba(255,82,82,.35);
+      color: rgba(255,82,82,.95);
+    }
+
+    /* Inputs */
+    label{
+      font-size: 12px;
+      color: var(--muted);
+      display:block;
+      margin-bottom: 6px;
+    }
+    select, input, button{
+      font: inherit;
+    }
+    select, input[type="text"], input[type="number"]{
+      width: 100%;
+      padding: 9px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.22);
+      color: var(--text);
+      outline: none;
+    }
+    input[type="range"]{
+      width: 100%;
+    }
+    .row{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    @media (max-width: 980px){
+      .row{ grid-template-columns: 1fr; }
+    }
+    .field{ margin-bottom: 12px; }
+
+    /* Toggle */
+    .toggle{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      user-select:none;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .toggle input{ width: 18px; height: 18px; }
+
+    /* Buttons */
+    .btnrow{
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    button{
+      cursor:pointer;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.22);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 12px;
+      transition: transform .05s ease, background .2s ease, border-color .2s ease;
+    }
+    button:active{ transform: scale(.98); }
+    button:disabled{
+      opacity: .45;
+      cursor:not-allowed;
+    }
+    .btn-primary{
+      background: linear-gradient(135deg, rgba(162,89,255,.85), rgba(55,255,248,.55));
+      border-color: rgba(162,89,255,.4);
+    }
+    .btn-danger{
+      background: rgba(255,82,82,.18);
+      border-color: rgba(255,82,82,.35);
+    }
+    .btn-ghost{
+      background: rgba(255,255,255,.06);
+    }
+
+    /* Meter */
+    .meterWrap{
+      display:flex;
+      gap: 12px;
+      align-items:stretch;
+    }
+    .meter{
+      width: 16px;
+      border-radius: 999px;
+      background: rgba(0,0,0,.25);
+      border: 1px solid rgba(255,255,255,.10);
+      overflow:hidden;
+      position: relative;
+    }
+    .meterFill{
+      position:absolute;
+      left:0; right:0;
+      bottom:0;
+      height: 0%;
+      background: linear-gradient(180deg, rgba(61,255,71,1), rgba(255,204,51,1), rgba(255,82,82,1));
+      transition: height .05s linear;
+    }
+    .meterMeta{
+      flex:1;
+      min-width: 0;
+    }
+    .metaLine{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .bar{
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(0,0,0,.25);
+      border: 1px solid rgba(255,255,255,.10);
+      overflow:hidden;
+      margin-top: 6px;
+    }
+    .bar > div{
+      height:100%;
+      width:0%;
+      background: linear-gradient(90deg, rgba(55,255,248,.8), rgba(162,89,255,.8));
+      transition: width .1s linear;
+    }
+
+    .badge{
+      display:inline-flex;
+      align-items:center;
+      gap: 6px;
+      font-size: 11px;
+      padding: 5px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.22);
+      color: rgba(255,255,255,.9);
+    }
+    .badge.clip{
+      border-color: rgba(255,82,82,.35);
+      color: rgba(255,82,82,.95);
+    }
+    .badge.limit{
+      border-color: rgba(255,204,51,.35);
+      color: rgba(255,204,51,.95);
+    }
+    .hidden{ display:none; }
+
+    /* Section Title */
+    .secTitle{
+      margin: 10px 0 8px 0;
+      font-size: 12px;
+      color: rgba(255,255,255,.85);
+      letter-spacing: .3px;
+      text-transform: uppercase;
+    }
+
+    .footer{
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255,255,255,.07);
+      font-size: 12px;
+      color: var(--muted);
+      display:flex;
+      justify-content:space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    /* Visual hint for fields that require restart */
+    .needs-restart{
+      outline: 2px solid rgba(255,204,51,.55);
+      box-shadow: 0 0 0 3px rgba(255,204,51,.10);
+    }
+
+    /* ===== Tabs (Config) ===== */
+    .tabs{
+      display:flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .tabbtn{
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.18);
+      color: rgba(255,255,255,.72);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .2px;
+      cursor: pointer;
+    }
+    .tabbtn.active{
+      background: linear-gradient(135deg, rgba(162,89,255,.45), rgba(55,255,248,.20));
+      border-color: rgba(55,255,248,.35);
+      color: rgba(255,255,255,.95);
+      box-shadow: 0 0 0 1px rgba(55,255,248,.08);
+    }
+    .tabpanel{ display:none; }
+    .tabpanel.active{ display:block; }
+
+    /* ===== Logs (Sidebar) ===== */
+    .logs{
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255,255,255,.07);
+    }
+    .logs summary{
+      cursor: pointer;
+      list-style: none;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 10px;
+      user-select:none;
+      font-size: 12px;
+      font-weight: 900;
+      color: rgba(255,255,255,.90);
+      letter-spacing: .2px;
+    }
+    .logs summary::-webkit-details-marker{ display:none; }
+    .logs-actions{
+      display:flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      margin-bottom: 10px;
+    }
+    .logs-box{
+      max-height: 180px;
+      overflow: auto;
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.25);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 11px;
+      line-height: 1.35;
+      color: rgba(255,255,255,.78);
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+
+<body>
+
+  {% set audio = config.get('audio', {}) %}
+  {% set repeater = config.get('repeater', {}) %}
+  {% set ident = config.get('identification', {}) %}
+  {% set tot = config.get('tot', {}) %}
+  {% set ptt = config.get('ptt', {}) %}
+  {% set ptt_mode = (ptt.get('mode', 'VOX')|string)|upper %}
+
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <div>
+          <h1>KrakenRelay</h1>
+          <span class="sub">An Open Source Repeater Controller</span>
+          <span class="sub">by American Squid/K3AYV</span>
+        </div>
+      </div>
+
+      <div class="status-pills">
+        <span class="pill"><span class="dot rx" id="rx-dot"></span> RX</span>
+        <span class="pill"><span class="dot tx" id="tx-dot"></span> TX</span>
+        <span class="pill" id="run-pill">Stopped</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <form id="config-form">
+
+      <div class="grid">
+
+        <!-- LEFT: Live control -->
+        <div class="card sidebar">
+          <div class="card-hd">
+            <h2>Live Status</h2>
+            <span class="pill" id="ptt-pill">PTT: Not Started</span>
+          </div>
+
+          <div class="card-bd">
+            <div class="metaLine" id="auto-start-error" style="color: var(--bad); font-weight: 800; display: none; margin-bottom: 10px;"></div>
+
+            <div class="meterWrap">
+              <div class="meter">
+                <div class="meterFill" id="level-bar"></div>
+              </div>
+
+              <div class="meterMeta">
+                <div class="metaLine">
+                  Audio: <span id="level-text">-60.0 dB</span>
+                </div>
+
+                <div class="metaLine">
+                  TOT: <span id="tot-text">—</span>
+                </div>
+                <div class="bar"><div id="tot-bar"></div></div>
+
+                <div class="metaLine" style="margin-top:8px;">
+                  Next ID: <span id="next-id-text">—</span>
+                  <span id="id-indicator" class="badge" style="display:none;">Sending ID</span>
+                  <span id="tot-lockout-indicator" class="badge clip" style="display:none;">TOT Lockout</span>
+                </div>
+
+                <div class="metaLine" style="margin-top:10px; gap:10px;">
+                  <span id="clip-alert" class="badge clip hidden">CLIPPING</span>
+                  <span id="limit-alert" class="badge limit hidden">LIMITING</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="height: 14px;"></div>
+
+            <div class="secTitle">Devices</div>
+
+            <div class="field">
+              <label for="input-device">Input Device</label>
+              <select id="input-device" name="input_index">
+                {% set sel_in = (audio.get("input_index")|string) %}
+                {% for dev in input_devices %}
+                  <option value="{{ dev.index }}" {% if (dev.index|string) == sel_in %}selected{% endif %}>{{ dev.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="output-device">Output Device</label>
+              <select id="output-device" name="output_index">
+                {% set sel_out = (audio.get("output_index")|string) %}
+                {% for dev in output_devices %}
+                  <option value="{{ dev.index }}" {% if (dev.index|string) == sel_out %}selected{% endif %}>{{ dev.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="btnrow">
+              <button type="button" id="start-btn" class="btn-primary">Start</button>
+              <button type="button" id="stop-btn" class="btn-danger" disabled>Stop</button>
+              <button type="button" id="id-btn" class="btn-ghost">Send CW ID</button>
+              <button type="button" id="test-ptt" class="btn-ghost">Test PTT</button>
+            </div>
+
+            <!-- Collapsible logs/diagnostics panel (under Live Status) -->
+            <details class="logs" id="logs-details">
+              <summary>
+                <span>Recent Events</span>
+                <span class="badge" id="logs-paused-badge" style="display:none;">Paused</span>
+              </summary>
+
+              <div class="logs-actions">
+                <button type="button" id="logs-clear-btn" class="mini-btn btn-ghost">Clear</button>
+                <button type="button" id="logs-pause-btn" class="mini-btn btn-ghost">Pause</button>
+              </div>
+
+              <pre class="logs-box" id="logs-box">Open to load…</pre>
+            </details>
+
+            <div class="footer">
+              <span id="status-note">Status updates every 500ms</span>
+              <span>Open Source Repeater Controller by American Squid/K3AYV</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: Settings -->
+        <div class="card" id="config-card">
+          <div class="card-hd">
+            <h2>Configuration</h2>
+
+            <div class="hdr-controls">
+              <span class="pill warn" id="restart-badge" style="display:none;">Restart required</span>
+              <span class="pill" id="save-status" style="display:none;"></span>
+
+              <button type="button" id="save-btn" class="mini-btn btn-primary">Save</button>
+
+              <label class="pill lockpill" title="Unlock to edit config">
+                <input type="checkbox" id="cfg-lock" checked>
+                <span id="lock-state" style="font-weight:800;">LOCKED</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="card-bd">
+
+            <!-- Config Tabs -->
+            <div class="tabs" id="config-tabs">
+              <button type="button" class="tabbtn" data-tab="audio">Audio</button>
+              <button type="button" class="tabbtn" data-tab="repeater">Repeater</button>
+              <button type="button" class="tabbtn" data-tab="id">ID</button>
+              <button type="button" class="tabbtn" data-tab="tot">TOT</button>
+              <button type="button" class="tabbtn" data-tab="ptt">PTT</button>
+            </div>
+
+            <!-- AUDIO TAB -->
+            <div class="tabpanel" data-tab="audio">
+              <div class="secTitle">Audio</div>
+
+              <div class="row">
+                <div class="field">
+                  <label for="sample-rate">Sample Rate (Hz)</label>
+                  <select id="sample-rate" data-key="audio.sample_rate">
+                    {% set sr = audio.get('sample_rate', 48000) %}
+                    <option value="8000"  {% if sr == 8000 %}selected{% endif %}>8000</option>
+                    <option value="16000" {% if sr == 16000 %}selected{% endif %}>16000</option>
+                    <option value="44100" {% if sr == 44100 %}selected{% endif %}>44100</option>
+                    <option value="48000" {% if sr == 48000 %}selected{% endif %}>48000</option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label for="chunk-size">Chunk Size (samples)</label>
+                  <input type="number" id="chunk-size" data-key="audio.chunk_size" min="256" step="1"
+                         value="{{ audio.get('chunk_size', 1920) }}">
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="field">
+                  <label for="squelch">Squelch (dB)</label>
+                  <input type="range" id="squelch" data-key="audio.squelch_threshold" min="-60" max="-20"
+                         value="{{ audio.get('squelch_threshold', -40) }}" />
+                  <div class="metaLine">Current: <span id="squelch-value">{{ audio.get('squelch_threshold', -40) }} dB</span></div>
+                </div>
+
+                <div class="field">
+                  <label>High-pass Filter</label>
+                  <div class="toggle">
+                    <input type="checkbox" id="highpass" data-key="audio.highpass_enabled"
+                      {% if audio.get('highpass_enabled', True) %}checked{% endif %}>
+                    <span>Enable</span>
+                  </div>
+
+                  <label for="highpass-cutoff" style="margin-top:10px;">Cutoff (Hz)</label>
+                  <input type="range" id="highpass-cutoff" data-key="audio.highpass_cutoff" min="100" max="1200" step="10"
+                         value="{{ audio.get('highpass_cutoff', 300) }}" />
+                  <div class="metaLine">Current: <span id="highpass-value">{{ audio.get('highpass_cutoff', 300) }} Hz</span></div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="field">
+                  <label>Limiter</label>
+                  <div class="toggle">
+                    <input type="checkbox" id="limiter" data-key="audio.limiter_enabled"
+                      {% if audio.get('limiter_enabled', True) %}checked{% endif %}>
+                    <span>Enable</span>
+                  </div>
+
+                  <label for="limiter-threshold" style="margin-top:10px;">Threshold (0–1)</label>
+                  <input type="range" id="limiter-threshold" data-key="audio.limiter_threshold" min="0.10" max="1.00" step="0.005"
+                         value="{{ audio.get('limiter_threshold', 0.85) }}" />
+                  <div class="metaLine">Current: <span id="limiter-value">{{ audio.get('limiter_threshold', 0.85) }}</span></div>
+                </div>
+                <div class="field">
+                <label>Compressor</label>
+                <div class="toggle">
+                  <input type="checkbox" id="compressor" data-key="audio.compressor_enabled"
+                    {% if audio.get('compressor_enabled', False) %}checked{% endif %}>
+                  <span>Enable</span>
+                </div>
+                <label for="compressor-strength" style="margin-top:10px;">
+                  Leveling Strength (0–100%)
+                </label>
+                <input
+                  type="range"
+                  id="compressor-strength"
+                  data-key="audio.compressor_strength_percent"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value="{{ audio.get('compressor_strength_percent', 50) }}"
+                />
+                <div class="metaLine">
+                  Current:
+                  <span id="compressor-value">
+                    {{ audio.get('compressor_strength_percent', 50) }}%
+                  </span>
+                </div>
+              </div>
+              
+              <div class="row">
+                <div class="field">
+                  <label>Dual Output</label>
+                  <div class="toggle">
+                    <input type="checkbox" id="dual-output" data-key="audio.dual_output"
+                      {% if audio.get('dual_output', False) %}checked{% endif %}>
+                    <span>Enable</span>
+                  </div>
+
+                  <label for="output-device-2" style="margin-top:10px;">Output Device 2</label>
+                  <select id="output-device-2" data-key="audio.output_device_2"
+                          {% if not audio.get('dual_output', False) %}disabled{% endif %}>
+                    {% set od2 = audio.get('output_device_2', 0) %}
+                    {% for dev in output_devices %}
+                      <option value="{{ dev.index }}" {% if dev.index == od2 %}selected{% endif %}>{{ dev.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- REPEATER TAB -->
+            <div class="tabpanel" data-tab="repeater">
+              <div class="secTitle">Repeater</div>
+
+              <div class="row">
+                <div class="field">
+                  <label for="tail-time">Hang Time (s)</label>
+                  <input type="number" step="0.1" id="tail-time" data-key="repeater.tail_time"
+                         value="{{ repeater.get('tail_time', 2.0) }}" />
+                </div>
+
+                <div class="field">
+                  <label for="carrier-delay">Carrier Delay (s)</label>
+                  <input type="number" step="0.1" id="carrier-delay" data-key="repeater.carrier_delay"
+                         value="{{ repeater.get('carrier_delay', 0.0) }}" />
+                </div>
+
+                <div class="field">
+                  <label for="kerchunk">Anti-Kerchunk (s)</label>
+                  <input type="number" step="0.1" id="kerchunk" data-key="repeater.anti_kerchunk_time"
+                         value="{{ repeater.get('anti_kerchunk_time', 0.0) }}" />
+                </div>
+
+                <div class="field">
+                  <label>Courtesy Tone</label>
+                  <div class="toggle">
+                    <input type="checkbox" id="courtesy-tone" data-key="repeater.courtesy_tone_enabled"
+                      {% if repeater.get('courtesy_tone_enabled', True) %}checked{% endif %}>
+                    <span>Enable</span>
+                  </div>
+
+                  <label for="courtesy-vol" style="margin-top:10px;">Courtesy Volume (0–100)</label>
+                  <input type="range" id="courtesy-vol" data-key="repeater.courtesy_tone_volume" min="0" max="100" step="1"
+                         value="{{ repeater.get('courtesy_tone_volume', 80) }}" />
+                  <div class="metaLine">Current: <span id="courtesy-vol-value">{{ repeater.get('courtesy_tone_volume', 80) }}</span></div>
+                </div>
+
+                <div class="field">
+                  <label>Auto-Start on Boot</label>
+                  <div class="toggle">
+                    <input type="checkbox" id="auto-start" data-key="repeater.auto_start"
+                      {% if repeater.get('auto_start', False) %}checked{% endif %}>
+                    <span>Enable</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ID TAB -->
+            <div class="tabpanel" data-tab="id">
+              <div class="secTitle">Identification</div>
+
+              <div class="row">
+                <div class="field">
+                  <label for="callsign">Callsign</label>
+                  <input type="text" id="callsign" data-key="identification.callsign"
+                         value="{{ ident.get('callsign', '') }}" style="text-transform:uppercase;">
+                </div>
+
+                <div class="field">
+                  <label for="id-interval">ID Interval (min)</label>
+                  <input type="number" id="id-interval" data-key="identification.interval_minutes" min="1" max="60"
+                         value="{{ ident.get('interval_minutes', 10) }}">
+                </div>
+
+                <div class="field">
+                  <label>CW ID</label>
+                  <div class="toggle">
+                    <input type="checkbox" id="cw-enabled" data-key="identification.cw_enabled"
+                      {% if ident.get('cw_enabled', True) %}checked{% endif %}>
+                    <span>Enable</span>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label for="cw-speed">CW Speed (WPM)</label>
+                  <input type="number" id="cw-speed" data-key="identification.cw_wpm" min="5" max="30"
+                         value="{{ ident.get('cw_wpm', 20) }}">
+                </div>
+
+                <div class="field">
+                  <label for="cw-pitch">CW Pitch (Hz)</label>
+                  <input type="number" id="cw-pitch" data-key="identification.cw_pitch" min="300" max="1200"
+                         value="{{ ident.get('cw_pitch', 523) }}">
+                </div>
+
+                <div class="field">
+                  <label for="cw-vol">CW Volume (0–100)</label>
+                  <input type="range" id="cw-vol" data-key="identification.cw_volume" min="0" max="100" step="1"
+                         value="{{ ident.get('cw_volume', 80) }}">
+                  <div class="metaLine">Current: <span id="cw-vol-value">{{ ident.get('cw_volume', 80) }}</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- TOT TAB -->
+            <div class="tabpanel" data-tab="tot">
+              <div class="secTitle">Timeout Timer</div>
+
+              <div class="row">
+                <div class="field">
+                  <label>TOT Enabled</label>
+                  <div class="toggle">
+                    <input type="checkbox" id="tot-enabled" data-key="tot.tot_enabled"
+                      {% if tot.get('tot_enabled', True) %}checked{% endif %}>
+                    <span>Enable</span>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label for="tot-time">TOT Time (s)</label>
+                  <input type="number" id="tot-time" data-key="tot.tot_time" min="10" step="1"
+                         value="{{ tot.get('tot_time', 180) }}">
+                </div>
+
+                <div class="field">
+                  <label for="tot-vol">TOT Volume (0–100)</label>
+                  <input type="range" id="tot-vol" data-key="tot.tot_volume" min="0" max="100" step="1"
+                         value="{{ tot.get('tot_volume', 80) }}">
+                  <div class="metaLine">Current: <span id="tot-vol-value">{{ tot.get('tot_volume', 80) }}</span></div>
+                </div>
+
+                <div class="field">
+                  <label for="tot-freq">TOT Tone Freq (Hz)</label>
+                  <input type="number" id="tot-freq" data-key="tot.tot_tone_freq" min="300" max="2000" step="10"
+                         value="{{ tot.get('tot_tone_freq', 1200) }}">
+                </div>
+
+                <div class="field">
+                  <label>TOT Lockout</label>
+                  <div class="toggle">
+                    <input type="checkbox" id="tot-lockout" data-key="tot.tot_lockout_enabled"
+                      {% if tot.get('tot_lockout_enabled', True) %}checked{% endif %}>
+                    <span>Enable</span>
+                  </div>
+
+                  <label for="lockout-time" style="margin-top:10px;">Lockout Time (s)</label>
+                  <input type="number" id="lockout-time" data-key="tot.tot_lockout_time" min="1" step="1"
+                         value="{{ tot.get('tot_lockout_time', 5) }}">
+                </div>
+              </div>
+            </div>
+
+            <!-- PTT TAB -->
+            <div class="tabpanel" data-tab="ptt">
+              <div class="secTitle">PTT</div>
+
+              <div class="row">
+                <div class="field">
+                  <label for="ptt-mode">PTT Mode</label>
+                  <select id="ptt-mode" data-key="ptt.primary.mode">
+                    {% set mode = (ptt.get('primary', {}).get('mode', 'VOX')|string)|upper %}
+                    <option value="VOX" {% if mode == "VOX" %}selected{% endif %}>VOX</option>
+                    <option value="CM108" {% if mode == "CM108" %}selected{% endif %}>CM108</option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label for="ptt-device">CM108 Device Path</label>
+                  <input type="text" id="ptt-device" data-key="ptt.primary.device_path"
+                         value="{{ ptt.get('primary', {}).get('device_path', '/dev/hidraw0') }}">
+                </div>
+
+                <div class="field">
+                  <label for="ptt-pin">CM108 GPIO Pin (1–8)</label>
+                  <input type="number" id="ptt-pin" data-key="ptt.primary.gpio_pin" min="1" max="8"
+                         value="{{ ptt.get('primary', {}).get('gpio_pin', '3') }}">
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </form>
+  </div>
+
+  <script>
+    // ====== Config Tabs ======
+    const tabBtns = Array.from(document.querySelectorAll("#config-tabs .tabbtn"));
+    const tabPanels = Array.from(document.querySelectorAll("#config-card .tabpanel"));
+
+    function activateTab(name){
+      tabBtns.forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+      tabPanels.forEach(p => p.classList.toggle("active", p.dataset.tab === name));
+      try { localStorage.setItem("krakenrelay.activeTab", name); } catch (_) {}
+    }
+
+    // Restore last tab (default to Audio)
+    let initialTab = "audio";
+    try { initialTab = localStorage.getItem("krakenrelay.activeTab") || "audio"; } catch (_) {}
+    activateTab(initialTab);
+
+    tabBtns.forEach(b => b.addEventListener("click", () => activateTab(b.dataset.tab)));
+
+    // ====== UI Readouts (sliders) ======
+    const squelchSlider = document.getElementById('squelch');
+    const squelchValue = document.getElementById('squelch-value');
+    squelchSlider.addEventListener('input', () => {
+      squelchValue.textContent = squelchSlider.value + ' dB';
+    });
+
+    const hpToggle = document.getElementById('highpass');
+    const hpCutoff = document.getElementById('highpass-cutoff');
+    const hpValue = document.getElementById('highpass-value');
+    hpToggle.addEventListener('change', () => {
+      hpCutoff.disabled = !hpToggle.checked || document.getElementById("cfg-lock").checked;
+    });
+    hpCutoff.addEventListener('input', () => {
+      hpValue.textContent = hpCutoff.value + ' Hz';
+    });
+
+    const limiterThr = document.getElementById('limiter-threshold');
+    const limiterVal = document.getElementById('limiter-value');
+    limiterThr.addEventListener('input', () => {
+      limiterVal.textContent = Number(limiterThr.value).toFixed(3);
+    });
+
+    const compSlider = document.getElementById("compressor-strength");
+    const compValue = document.getElementById("compressor-value");
+    if (compSlider && compValue) {
+      compSlider.addEventListener("input", () => {
+        compValue.textContent = compSlider.value + "%";
+      });
+    }
+
+    const courtesyVol = document.getElementById('courtesy-vol');
+    const courtesyVolValue = document.getElementById('courtesy-vol-value');
+    courtesyVol.addEventListener('input', () => {
+      courtesyVolValue.textContent = courtesyVol.value;
+    });
+
+    const cwVol = document.getElementById('cw-vol');
+    const cwVolValue = document.getElementById('cw-vol-value');
+    cwVol.addEventListener('input', () => {
+      cwVolValue.textContent = cwVol.value;
+    });
+
+    const totVol = document.getElementById('tot-vol');
+    const totVolValue = document.getElementById('tot-vol-value');
+    totVol.addEventListener('input', () => {
+      totVolValue.textContent = totVol.value;
+    });
+
+    // ====== Helpers ======
+    function setDot(el, on){
+      if(on){ el.classList.add('on'); }
+      else { el.classList.remove('on'); }
+    }
+    function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
+
+    // ====== Start/Stop (with confirmation on STOP) ======
+    document.getElementById('start-btn').addEventListener('click', () => {
+      const formData = new FormData(document.getElementById('config-form'));
+      fetch('/start', { method: 'POST', body: formData })
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === 'running') {
+            document.getElementById('start-btn').disabled = true;
+            document.getElementById('stop-btn').disabled = false;
+          } else {
+            alert('Failed to start: ' + (data.message || 'Unknown error'));
+          }
+        })
+        .catch(err => alert('Start failed: ' + err));
+    });
+
+    document.getElementById('stop-btn').addEventListener('click', () => {
+      const ok = window.confirm(
+        "Are you sure you want to stop the repeater?\n" +
+        "This will unkey PTT and stop all repeater activity."
+      );
+      if (!ok) return;
+
+      fetch('/stop', { method: 'POST' })
+        .then(res => res.json())
+        .then(() => {
+          document.getElementById('start-btn').disabled = false;
+          document.getElementById('stop-btn').disabled = true;
+        });
+    });
+
+    document.getElementById('id-btn').addEventListener('click', () => {
+      fetch('/manual_id', { method: 'POST' }).catch(()=>{});
+    });
+    document.getElementById('test-ptt').addEventListener('click', () => {
+      fetch('/ptt_test', { method: 'POST' }).catch(()=>{});
+    });
+
+    // ====== Status polling (slow) ======
+    let uiRunning = false;
+
+    setInterval(() => {
+      fetch('/status', { cache: "no-store" })
+        .then(res => res.json())
+        .then(status => {
+          uiRunning = !!status.running;
+
+          // keep Start/Stop buttons in sync with actual backend state (covers auto-start)
+          document.getElementById('start-btn').disabled = !!status.running;
+          document.getElementById('stop-btn').disabled = !status.running;
+
+          // show auto-start/config errors even when stopped
+          const autoErr = document.getElementById('auto-start-error');
+          if (autoErr) {
+            if (status.auto_start_error) {
+              autoErr.style.display = 'block';
+              autoErr.textContent = status.auto_start_error;
+            } else {
+              autoErr.style.display = 'none';
+              autoErr.textContent = '';
+            }
+          }
+
+          const txDot = document.getElementById('tx-dot');
+          const rxDot = document.getElementById('rx-dot');
+          const runPill = document.getElementById('run-pill');
+          const pttPill = document.getElementById('ptt-pill');
+
+          if (!status.running) {
+            setDot(txDot, false);
+            setDot(rxDot, false);
+            runPill.textContent = 'Stopped';
+            pttPill.textContent = 'PTT: Not Started';
+
+            document.getElementById('tot-lockout-indicator').style.display = 'none';
+            document.getElementById('id-indicator').style.display = 'none';
+            document.getElementById('tot-text').textContent = '—';
+            document.getElementById('next-id-text').textContent = '—';
+            document.getElementById('tot-bar').style.width = '0%';
+            return;
+          }
+
+          // lights
+          setDot(txDot, !!status.tx);
+          setDot(rxDot, !!status.rx);
+          runPill.textContent = status.tx ? 'Running (TX)' : (status.rx ? 'Running (RX)' : 'Running');
+
+          // ptt
+          if (status.ptt_status_text) {
+            pttPill.textContent = status.ptt_status_text;
+            if (status.ptt_status_color) pttPill.style.color = status.ptt_status_color;
+          }
+
+          // TOT lockout badge
+          const totBadge = document.getElementById('tot-lockout-indicator');
+          totBadge.style.display = status.tot_lockout ? 'inline-flex' : 'none';
+
+          // TOT progress
+          const totEnabled = !!status.tot_enabled;
+          const totElapsed = (typeof status.tot_elapsed === 'number') ? status.tot_elapsed : 0;
+          const totLimit = (typeof status.tot_limit === 'number') ? status.tot_limit : 0;
+
+          if (!totEnabled) {
+            document.getElementById('tot-text').textContent = 'Disabled';
+            document.getElementById('tot-bar').style.width = '0%';
+          } else if (totLimit > 0) {
+            document.getElementById('tot-text').textContent = `${totElapsed.toFixed(1)} / ${totLimit}s`;
+            const totPct = clamp((totElapsed / totLimit) * 100, 0, 100);
+            document.getElementById('tot-bar').style.width = totPct + '%';
+          } else {
+            document.getElementById('tot-text').textContent = `${totElapsed.toFixed(1)}s`;
+            document.getElementById('tot-bar').style.width = '0%';
+          }
+
+          // ID indicator + next id time
+          const idBadge = document.getElementById('id-indicator');
+          idBadge.style.display = status.sending_id ? 'inline-flex' : 'none';
+
+          if (typeof status.next_id_in === 'number') {
+            document.getElementById('next-id-text').textContent = Math.ceil(status.next_id_in) + 's';
+          } else {
+            document.getElementById('next-id-text').textContent = '—';
+          }
+        })
+        .catch(()=>{ uiRunning = false; });
+    }, 500);
+
+    // ====== Smooth meters (fast) ======
+    let targetRxDb = -60, shownRxDb = -60;
+    let targetTxDb = -60, shownTxDb = -60;
+
+    function smoothStep(shown, target){
+      const attack = 0.35;   // fast rise
+      const release = 0.08;  // slow fall
+      const a = (target > shown) ? attack : release;
+      return shown + (target - shown) * a;
+    }
+    function dbToPct(db){
+      return Math.min(100, Math.max(0, (db + 60) / 60 * 100));
+    }
+    function meterTick(){
+      shownRxDb = smoothStep(shownRxDb, targetRxDb);
+      shownTxDb = smoothStep(shownTxDb, targetTxDb);
+
+      document.getElementById('level-bar').style.height = dbToPct(shownRxDb) + '%';
+      document.getElementById('level-text').textContent = shownRxDb.toFixed(1) + ' dB';
+
+      requestAnimationFrame(meterTick);
+    }
+    requestAnimationFrame(meterTick);
+
+    setInterval(() => {
+      if (!uiRunning) { targetRxDb = -60; targetTxDb = -60; return; }
+
+      fetch('/meter', { cache: "no-store" })
+        .then(r => r.json())
+        .then(m => {
+          if (!m.running) { targetRxDb = -60; targetTxDb = -60; return; }
+
+          targetRxDb = (typeof m.rx_db === 'number') ? m.rx_db : -60;
+          targetTxDb = (typeof m.tx_db === 'number') ? m.tx_db : -60;
+
+          const clip = document.getElementById('clip-alert');
+          const limit = document.getElementById('limit-alert');
+          if (m.clipping) clip.classList.remove('hidden'); else clip.classList.add('hidden');
+          if (m.limiting) limit.classList.remove('hidden'); else limit.classList.add('hidden');
+        })
+        .catch(()=>{});
+    }, 50);
+
+    // ====== Conservative Config Lock + Live Updates + Save (with confirmation) ======
+    const lockEl = document.getElementById("cfg-lock");
+    const lockState = document.getElementById("lock-state");
+    const saveBtn = document.getElementById("save-btn");
+    const saveStatus = document.getElementById("save-status");
+    const restartBadge = document.getElementById("restart-badge");
+
+    // things we need for conditional disables
+    const dualOutputEl = document.getElementById("dual-output");
+    const out2El = document.getElementById("output-device-2");
+    const courtesyToneEl = document.getElementById("courtesy-tone");
+    const courtesyVolEl = document.getElementById("courtesy-vol");
+    const cwEnabledEl = document.getElementById("cw-enabled");
+    const totLockoutEl = document.getElementById("tot-lockout");
+    const lockoutTimeEl = document.getElementById("lockout-time");
+    const pttModeEl = document.getElementById("ptt-mode");
+    const pttDevEl = document.getElementById("ptt-device");
+    const pttPinEl = document.getElementById("ptt-pin");
+
+    // helper: POST JSON
+    async function postJSON(url, body){
+      const r = await fetch(url, {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify(body)
+      });
+
+      let payload = {};
+      try { payload = await r.json(); } catch (_) {}
+
+      if (!r.ok){
+        const msg = payload?.message || payload?.error || payload?.status || r.statusText || "request failed";
+        throw new Error(`${r.status} ${msg}`);
+      }
+      return payload;
+    }
+
+    // helper: tiny pill feedback
+    function setSavePill(text, cls){
+      saveStatus.style.display = "inline-flex";
+      saveStatus.textContent = text;
+      saveStatus.classList.remove("ok","warn","bad");
+      if (cls) saveStatus.classList.add(cls);
+      setTimeout(() => { saveStatus.style.display = "none"; }, 1500);
+    }
+
+    // keep dependent fields disabled when feature is off (and also when locked)
+    function syncConditionalDisables(){
+      const locked = lockEl.checked;
+
+      // HP cutoff should be disabled if HPF off or locked
+      const hpToggle = document.getElementById("highpass");
+      const hpCutoff = document.getElementById("highpass-cutoff");
+      if (hpToggle && hpCutoff){
+        hpCutoff.disabled = locked || !hpToggle.checked;
+      }
+
+      // dual output device picker
+      if (out2El && dualOutputEl){
+        out2El.disabled = locked || !dualOutputEl.checked;
+      }
+
+      // courtesy volume only when courtesy tone enabled
+      if (courtesyVolEl && courtesyToneEl){
+        courtesyVolEl.disabled = locked || !courtesyToneEl.checked;
+      }
+
+      // CW fields only when CW enabled
+      ["cw-speed","cw-pitch","cw-vol"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && cwEnabledEl){
+          el.disabled = locked || !cwEnabledEl.checked;
+        }
+      });
+
+      // TOT lockout time only when lockout enabled
+      if (lockoutTimeEl && totLockoutEl){
+        lockoutTimeEl.disabled = locked || !totLockoutEl.checked;
+      }
+
+      // PTT fields: conservative UX (VOX doesn't need device/pin)
+      if (pttModeEl && pttDevEl && pttPinEl){
+        const mode = String(pttModeEl.value || "").toUpperCase();
+        const pttFieldsShouldBeEnabled = !locked && (mode === "CM108");
+        pttDevEl.disabled = !pttFieldsShouldBeEnabled;
+        pttPinEl.disabled = !pttFieldsShouldBeEnabled;
+      }
+    }
+
+    function setLockedUI(locked){
+      lockState.textContent = locked ? "LOCKED" : "UNLOCKED";
+      lockState.style.color = locked ? "#ffcc33" : "#3dff47";
+
+      const configCard = document.getElementById("config-card");
+
+      if (configCard){
+        configCard.querySelectorAll('input, select, textarea, button').forEach(el => {
+          // never disable the lock checkbox itself
+          if (el === lockEl) return;
+
+          // allow Save always
+          if (el.id === "save-btn") return;
+
+          // allow tab buttons always (you can view config even when locked)
+          if (el.classList && el.classList.contains("tabbtn")) return;
+
+          el.disabled = locked;
+        });
+      }
+
+      syncConditionalDisables();
+    }
+
+    // default lock UI
+    setLockedUI(true);
+
+    // one change handler (with confirm on unlock)
+    lockEl.addEventListener('change', async () => {
+      if (!lockEl.checked) {
+        const ok = window.confirm(
+          "You are about to unlock configuration controls\n\n" +
+          "Changing repeater settings may disrupt normal operation.\n\n" +
+          "Are you sure you want to proceed?"
+        );
+
+        if (!ok) {
+          lockEl.checked = true;
+          setLockedUI(true);
+          return;
+        }
+
+        setLockedUI(false);
+        try {
+          await postJSON("/lock", { locked: false });
+        } catch (err) {
+          console.error("Failed to unlock backend config:", err);
+          setSavePill("Backend lock failed", "bad");
+          lockEl.checked = true;
+          setLockedUI(true);
+        }
+        return;
+      }
+
+      setLockedUI(true);
+      try {
+        await postJSON("/lock", { locked: true });
+      } catch (err) {
+        console.error("Failed to lock backend config:", err);
+        setSavePill("Backend lock failed", "bad");
+      }
+    });
+
+    // Live update: send changes as they happen (but show restart required if backend says so)
+    const liveInputs = document.querySelectorAll("[data-key]");
+    liveInputs.forEach(el => {
+      el.addEventListener("change", async () => {
+        if (lockEl.checked) return;
+
+        const key = el.getAttribute("data-key");
+        let val;
+
+        if (el.type === "checkbox") val = !!el.checked;
+        else val = el.value;
+
+        try {
+          const resp = await postJSON("/config/live", { key, value: val });
+
+          // clear restart hint unless backend says otherwise
+          el.classList.remove("needs-restart");
+          restartBadge.style.display = "none";
+
+          if (resp.status === "restart_required"){
+            restartBadge.style.display = "inline-flex";
+            el.classList.add("needs-restart");
+          }
+        } catch (err) {
+          // backend may return 409 restart_required or 423 locked
+          const msg = String(err?.message || err);
+          if (msg.includes("409")) {
+            restartBadge.style.display = "inline-flex";
+            el.classList.add("needs-restart");
+          } else if (msg.includes("423")) {
+            setSavePill("Locked", "warn");
+          } else {
+            setSavePill("Live update failed", "bad");
+          }
+        }
+
+        syncConditionalDisables();
+      });
+    });
+
+    // Save to disk (confirm)
+    saveBtn.addEventListener("click", async () => {
+      const ok = window.confirm(
+        "Save configuration changes?\n" +
+        "Some settings may require a restart to take effect."
+      );
+      if (!ok) return;
+
+      try {
+        await postJSON("/config/save", {});
+        setSavePill("Saved", "ok");
+      } catch (err) {
+        console.error(err);
+        setSavePill("Save failed", "bad");
+      }
+    });
+
+    // Keep conditional fields synced at boot
+    syncConditionalDisables();
+
+    // ====== Logs panel ======
+    const logsDetails = document.getElementById("logs-details");
+    const logsBox = document.getElementById("logs-box");
+    const logsClearBtn = document.getElementById("logs-clear-btn");
+    const logsPauseBtn = document.getElementById("logs-pause-btn");
+    const logsPausedBadge = document.getElementById("logs-paused-badge");
+
+    let logsAfter = 0;
+    let logsPaused = false;
+    let logsSeenAny = false;
+    const logLines = [];
+
+    function setLogsPaused(p){
+      logsPaused = !!p;
+      logsPauseBtn.textContent = logsPaused ? "Resume" : "Pause";
+      logsPausedBadge.style.display = logsPaused ? "inline-flex" : "none";
+    }
+    setLogsPaused(false);
+
+    function renderLogs(){
+      logsBox.textContent = logLines.length ? logLines.join("\n") : "No events yet.";
+      logsBox.scrollTop = logsBox.scrollHeight;
+    }
+
+    async function fetchLogs(){
+      if (!logsDetails.open) return;
+      if (logsPaused) return;
+
+      try{
+        const r = await fetch(`/logs?after=${logsAfter}&limit=200`, { cache: "no-store" });
+        if (!r.ok) throw new Error("logs endpoint unavailable");
+        const data = await r.json();
+
+        const entries = Array.isArray(data.entries) ? data.entries : [];
+        if (!entries.length){
+          if (!logsSeenAny) renderLogs();
+          return;
+        }
+
+        logsSeenAny = true;
+
+        for (const e of entries){
+          if (typeof e.id === "number") logsAfter = Math.max(logsAfter, e.id);
+          if (typeof e.message === "string") logLines.push(e.message);
+          if (logLines.length > 200) logLines.splice(0, logLines.length - 200);
+        }
+        renderLogs();
+      }catch(e){
+        // Don’t spam; only show once.
+        if (!logsSeenAny){
+          logsBox.textContent = "Logs are not available (backend /logs not implemented yet).";
+          logsSeenAny = true;
+        }
+      }
+    }
+
+    // Only start polling when panel is opened
+    logsDetails.addEventListener("toggle", () => {
+      if (logsDetails.open){
+        // reset to recent window when opened
+        logsAfter = 0;
+        logLines.length = 0;
+        logsSeenAny = false;
+        logsBox.textContent = "Loading…";
+        fetchLogs();
+      }
+    });
+
+    logsClearBtn.addEventListener("click", async () => {
+      logLines.length = 0;
+      logsAfter = 0;
+      logsSeenAny = false;
+      logsBox.textContent = "Cleared.";
+      try { await fetch("/logs/clear", { method: "POST" }); } catch (_) {}
+    });
+
+    logsPauseBtn.addEventListener("click", () => {
+      setLogsPaused(!logsPaused);
+      if (!logsPaused) fetchLogs();
+    });
+
+    setInterval(fetchLogs, 900);
+  </script>
+</body>
+</html>
