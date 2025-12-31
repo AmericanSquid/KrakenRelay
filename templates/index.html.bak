@@ -63,12 +63,8 @@
       width: 34px;
       height: 34px;
       border-radius: 10px;
+      background: linear-gradient(135deg, rgba(162,89,255,1), rgba(55,255,248,1));
       box-shadow: 0 0 18px rgba(162,89,255,.3);
-      background-image: url("/static/logo.png");
-      background-size: contain;
-      background-repeat: no-repeat;
-      background-position: center;
-      flex-shrink: 0;
     }
     .brand h1{
       margin:0;
@@ -371,13 +367,13 @@
       flex-wrap: wrap;
     }
 
-    /* Visual hint for fields with pending (unapplied) changes */
-    .pending-changes,
+    /* Visual hint for fields that require restart */
     .needs-restart{
       outline: 2px solid rgba(255,204,51,.55);
       box-shadow: 0 0 0 3px rgba(255,204,51,.10);
     }
-/* ===== Tabs (Config) ===== */
+
+    /* ===== Tabs (Config) ===== */
     .tabs{
       display:flex;
       gap: 8px;
@@ -579,7 +575,7 @@
             <div class="hdr-controls">
               <span class="pill warn" id="pending-badge" style="display:none;">Pending changes</span>
               <span class="pill" id="save-status" style="display:none;"></span>
-              <button type="button" id="apply-btn" class="mini-btn btn-primary">Apply Changes</button>
+              <button type="button" id="apply-btn" class="mini-btn btn-primary">Apply</button>
 
               <label class="pill lockpill" title="Unlock to edit config">
                 <input type="checkbox" id="cfg-lock" checked>
@@ -1167,26 +1163,6 @@
       return payload;
     }
 
-    // helper: POST JSON (lenient for legacy 409 on /config/live)
-    async function postJSONAllow409(url, body){
-      const r = await fetch(url, {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify(body)
-      });
-
-      let payload = {};
-      try { payload = await r.json(); } catch (_) {}
-
-      // Legacy backend may return HTTP 409 while still updating in-memory config.
-      if (!r.ok && r.status !== 409){
-        const msg = payload?.message || payload?.error || payload?.status || r.statusText || "request failed";
-        throw new Error(`${r.status} ${msg}`);
-      }
-      payload._http_status = r.status;
-      return payload;
-    }
-
     // helper: tiny pill feedback
     function setSavePill(text, cls){
       saveStatus.style.display = "inline-flex";
@@ -1302,8 +1278,7 @@
       }
     });
 
-    // Live update: send changes as they happen
-    // Any successful change => show "Pending changes" (until Apply Changes is clicked).
+    // Live update: send changes as they happen (but show restart required if backend says so)
     const liveInputs = document.querySelectorAll("[data-key]");
     liveInputs.forEach(el => {
       el.addEventListener("change", async () => {
@@ -1316,11 +1291,23 @@
         else val = el.value;
 
         try {
-          await postJSONAllow409("/config/live", { key, value: val });
-          pendingBadge.style.display = "inline-flex";
+          const resp = await postJSON("/config/live", { key, value: val });
+
+          // clear restart hint unless backend says otherwise
+          el.classList.remove("needs-restart");
+          restartBadge.style.display = "none";
+
+          if (resp.status === "restart_required"){
+            restartBadge.style.display = "inline-flex";
+            el.classList.add("needs-restart");
+          }
         } catch (err) {
+          // backend may return 409 restart_required or 423 locked
           const msg = String(err?.message || err);
-          if (msg.includes("423")) {
+          if (msg.includes("409")) {
+            restartBadge.style.display = "inline-flex";
+            el.classList.add("needs-restart");
+          } else if (msg.includes("423")) {
             setSavePill("Locked", "warn");
           } else {
             setSavePill("Live update failed", "bad");
@@ -1331,33 +1318,20 @@
       });
     });
 
-    // Apply Changes: save config to disk (confirm)
-    applyBtn.addEventListener("click", async () => {
+    // Save to disk (confirm)
+    saveBtn.addEventListener("click", async () => {
       const ok = window.confirm(
-        "Apply configuration changes?\n\n" +
-        "This saves the current settings to config.yaml.\n" +
-        "Some changes may require stopping/starting the repeater to take effect."
+        "Save configuration changes?\n" +
+        "Some settings may require a restart to take effect."
       );
       if (!ok) return;
 
       try {
-        // Prefer the newer /config/apply route if present, but stay compatible with /config/save.
-        try {
-          await postJSON("/config/apply", {});
-        } catch (e) {
-          const msg = String(e?.message || e);
-          if (msg.includes("404")) {
-            await postJSON("/config/save", {});
-          } else {
-            throw e;
-          }
-        }
-
-        setSavePill("Applied", "ok");
-        pendingBadge.style.display = "none";
+        await postJSON("/config/save", {});
+        setSavePill("Saved", "ok");
       } catch (err) {
         console.error(err);
-        setSavePill("Apply failed", "bad");
+        setSavePill("Save failed", "bad");
       }
     });
 
