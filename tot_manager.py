@@ -38,7 +38,8 @@ class TOTManager:
         elapsed = time.time() - self.tx_start_time
         now = time.time()
         if now - self._last_tot_log >= 1.0:
-            logging.debug(f"TOT: elapsed={elapsed:.1f}s / limit={self.tot_limit}s")
+            if logging.getLogger().isEnabledFor(logging.DEBUG):
+                logging.debug(f"TOT: elapsed={elapsed:.1f}s / limit={self.tot_limit}s")
             self._last_tot_log = now
         if elapsed >= self.tot_limit:
             logging.warning(f"TOT limit reached at {elapsed:.1f} seconds")

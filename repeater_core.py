@@ -139,6 +139,15 @@ class RepeaterController:
         self.output_thread = None
         self._output_stop_event = threading.Event()
         self._unkey_after_drain = False
+        self.out2_queue = None
+        self.out2_thread = None
+        self.out2_stop = threading.Event()
+
+        # Silence Buffer
+        self._silence_chunk = np.zeros(self.config.config['audio']['chunk_size'], dtype=np.int16)
+        self._silence_bytes = self._silence_chunk.tobytes()
+        # Noise Buffer
+        self._noise_chunk = (np.random.randint(-20000, 20000, self.chunk_size)).astype(np.int16)
 
         # CW ID (new logic)
         self._cw_gen = None
@@ -223,12 +232,15 @@ class RepeaterController:
                             rate=audio_config['sample_rate'],
                             chunk=audio_config['chunk_size']
                         )
+                        self._start_out2_worker()
                         logging.info(f"Dual output enabled on device index {second_index}")
+                        
                     except Exception as e:
                         logging.warning(f"Dual output: failed to open second stream (idx={second_index}): {e}")
                         self.output_stream_2 = None
             else:
-                logging.debug("Dual output disabled in config")
+                if logging.getLogger().isEnabledFor(logging.DEBUG):
+                    logging.debug("Dual output disabled in config")
 
             # ---- Primary input/output streams ----
             self.input_stream = self.audio_manager.create_input_stream(
@@ -289,16 +301,18 @@ class RepeaterController:
                 self.squelch_open_time = now
                 self._last_above_squelch = now
                 self.kerchunk_buffer = []
-                logging.debug("[Squelch] OPEN db=%.1f thr=%.1f", level_db, open_thr)
+                if logging.getLogger().isEnabledFor(logging.DEBUG):
+                    logging.debug("[Squelch] OPEN db=%.1f thr=%.1f", level_db, open_thr)
         else:
             if level_db > close_thr:
                 self._last_above_squelch = now
             elif (now - self._last_above_squelch) >= hang_time:
                 self.squelch_open = False
-                logging.debug(
-                    "[Squelch] CLOSE db=%.1f close_thr=%.1f hang=%.2f",
-                    level_db, close_thr, hang_time
-                )
+                if logging.getLogger().isEnabledFor(logging.DEBUG):
+                    logging.debug(
+                        "[Squelch] CLOSE db=%.1f close_thr=%.1f hang=%.2f",
+                        level_db, close_thr, hang_time
+                    )
 
         return self.squelch_open
 
@@ -345,11 +359,7 @@ class RepeaterController:
             except Exception as e:
                 logging.warning(f"[Output] Primary output write failed: {e}")
             
-            if self.output_stream_2:
-                try:
-                    self.output_stream_2.write(chunk)
-                except Exception as e:
-                    logging.warning(f"[Output] Secondary output write failed: {e}")
+            self._send_to_secondary(chunk)
 
             # If we requested unkey, do it only after all queued audio has played
             if self._unkey_after_drain and self.audio_output_queue.empty():
@@ -358,6 +368,66 @@ class RepeaterController:
                 self.skip_courtesy_tone = False
                 self.ptt_manager.safe_ptt_unkey()
                 logging.info("Transmitter unkeyed (after drain).")
+
+    def _start_out2_worker(self):
+        if not self.output_stream_2:
+            return
+        if self.out2_thread and self.out2_thread.is_alive():
+            return
+        self.out2_queue = queue.Queue(maxsize=8)
+        self.out2_stop.clear()
+        self.out2_thread = threading.Thread(
+            target=self._out2_worker,
+            name="RepeaterOut2Worker",
+            daemon=True
+        )
+        self.out2_thread.start()
+
+    def _stop_out2_worker(self):
+        self.out2_stop.set()
+        if self.out2_queue:
+            try:
+                self.out2_queue.put_nowait(None)
+            except Exception:
+                pass
+        if self.out2_thread and self.out2_thread.is_alive():
+            self.out2_thread.join(timeout=1.0)
+        self.out2_thread = None
+        self.out2_queue = None
+
+    def _out2_worker(self):
+        while not self.out2_stop.is_set():
+            try:
+                item = self.out2_queue.get(timeout=0.2) if self.out2_queue else None
+            except queue.Empty:
+                continue
+            if item is None:
+                break
+            if not self.output_stream_2:
+                continue
+            try:
+                self.output_stream_2.write(item)
+            except Exception as e:
+                logging.warning(f"[Dual Output] Secondary output failed, disabling: {e}")
+                try:
+                    self.output_stream_2.stop_stream()
+                    self.output_stream_2.close()
+                except Exception:
+                    pass
+                self.output_stream_2 = None
+                break
+
+    def _send_to_secondary(self, data: bytes):
+        if not self.output_stream_2 or not self.out2_queue:
+            return
+        try:
+            self.out2_queue.put_nowait(data)
+        except queue.Full:
+            try:
+                _ = self.out2_queue.get_nowait()
+                self.out2_queue.put_nowait(data)
+            except Exception:
+                pass
 
     #----------------#
     # System Control #
@@ -380,7 +450,13 @@ class RepeaterController:
 
         logging.info(f"🧵 Active threads after start: {threading.active_count()}")
         for t in threading.enumerate():
-            logging.info(f"  • {t.name}")
+            try:
+                ident = t.ident  # Python thread ident
+                # On Linux, get native TID (will match top/htop)
+                tid = t.native_id if hasattr(t, 'native_id') else None
+                logging.info(f"Thread name: {t.name}, ident: {ident}, native_id: {tid}")
+            except Exception as e:
+                logging.info(f"Could not get info for thread: {t} ({e})")
 
     def audio_loop(self):
         consecutive_errors = 0
@@ -481,6 +557,8 @@ class RepeaterController:
         self._output_stop_event.set()
         if hasattr(self, "output_thread") and self.output_thread:
             self.output_thread.join(timeout=1.0)
+        
+        self._stop_out2_worker()
 
         # Closing streams
         try:
@@ -518,7 +596,7 @@ class RepeaterController:
         try:
             data = self.audio_input_queue.get(timeout=0.1)
         except queue.Empty:
-            logging.debug("[Audio] No input audio available in buffer.")
+            #logging.debug("[Audio] No input audio available in buffer.")
             return
         samples = np.frombuffer(data, dtype=np.int16).astype(np.float32)
         self.current_rms = calculate_db_level(samples)
@@ -540,17 +618,20 @@ class RepeaterController:
                 self.squelch_open_time = now
                 self.kerchunk_buffer = []  # clear buffer on a fresh open edge
                 self.tx_start_pending = True
-                logging.debug("[Anti-Kerchunk] Squelch open. Holding off")
+                if logging.getLogger().isEnabledFor(logging.DEBUG):
+                    logging.debug("[Anti-Kerchunk] Squelch open. Holding off")
             else:
                 # Squelch reopened during an ongoing transmission – no kerchunk holdoff
-                logging.debug("[Anti-Kerchunk] Squelch reopened during transmit; kerchunk holdoff bypassed")
+                if logging.getLogger().isEnabledFor(logging.DEBUG):
+                    logging.debug("[Anti-Kerchunk] Squelch reopened during transmit; kerchunk holdoff bypassed")
         elif not squelch_open_now and prev_open:
             if not self.transmitting and self.kerchunk_buffer:
                 logging.info("[Anti-Kerchunk] Suppressed short key-up.")
                 self.kerchunk_buffer = []
             if not self.transmitting:
                 self.tx_start_pending = False
-            logging.debug("[Anti-Kerchunk] Squelch closed.")
+            if logging.getLogger().isEnabledFor(logging.DEBUG):
+                logging.debug("[Anti-Kerchunk] Squelch closed.")
 
         if squelch_open_now:
             # Process audio chain
@@ -558,7 +639,8 @@ class RepeaterController:
                 self.config.config["audio"].get("highpass_enabled", False)
                 or self.config.config["audio"].get("compressor_enabled", False)
             ):
-                samples = self.dsp_rx.process_int16_to_int16(samples)
+                if np.max(np.abs(samples)) > 16:
+                    samples = self.dsp_rx.process_int16_to_int16(samples)
 
             self.current_rms = np.sqrt(np.mean(samples**2))
             
@@ -573,8 +655,7 @@ class RepeaterController:
                 self.stop_transmission()
             else:
                 # 🚨 We're in the tail hang time — KEEP AUDIO FLOWING
-                silent_chunk = np.zeros(self.config.config['audio']['chunk_size'], dtype=np.int16)               
-                self._send_pcm(silent_chunk)
+                self._send_pcm(self._silence_chunk)
     def handle_transmission(self, samples):
         if self.tot_manager.check_timeout(self.transmitting):
             self.tone_player.play_tot_tone()
@@ -585,10 +666,7 @@ class RepeaterController:
             now = time.time()
             if now < self.vox_delay_end_time:
                 # Send noise burst chunk instead of real audio
-                sample_rate = self.config.config['audio']['sample_rate']
-                chunk_size = self.config.config['audio']['chunk_size']
-                noise = (np.random.randint(-20000, 20000, chunk_size)).astype(np.int16)
-                self._send_pcm(noise)
+                self._send_pcm(self._noise_chunk)
                 # Buffer the real samples for immediate transmit after delay
                 self.vox_buffer.append(samples.copy())
                 return
@@ -612,22 +690,25 @@ class RepeaterController:
 
                     # Log occasionally so you don’t spam
                     if len(self.kerchunk_buffer) == 1 or len(self.kerchunk_buffer) % 10 == 0:
-                        logging.debug(
-                            "[AntiKerchunk] Holdoff: held=%.3fs remaining=%.3fs buffered=%d",
-                            held, remaining, len(self.kerchunk_buffer)
-                        )
+                        if logging.getLogger().isEnabledFor(logging.DEBUG):
+                            logging.debug(
+                                "[AntiKerchunk] Holdoff: held=%.3fs remaining=%.3fs buffered=%d",
+                                held, remaining, len(self.kerchunk_buffer)
+                            )
                     return
 
                 # Gate passed
-                logging.info(
-                    "[AntiKerchunk] Gate passed: held=%.3fs >= %.3fs. Starting TX. buffered=%d",
-                    held, anti_s, len(self.kerchunk_buffer)
-                )
+                if logging.getLogger().isEnabledFor(logging.DEBUG):
+                    logging.debug(
+                        "[AntiKerchunk] Gate passed: held=%.3fs >= %.3fs. Starting TX. buffered=%d",
+                        held, anti_s, len(self.kerchunk_buffer)
+                    )
 
             self.start_transmission()
 
             if self.kerchunk_buffer:
-                logging.debug("[AntiKerchunk] Flushing %d buffered chunks", len(self.kerchunk_buffer))
+                if logging.getLogger().isEnabledFor(logging.DEBUG):
+                    logging.debug("[AntiKerchunk] Flushing %d buffered chunks", len(self.kerchunk_buffer))
                 for chunk in self.kerchunk_buffer:
                     self.tx_backlog.append(chunk)
                 self.kerchunk_buffer = []
@@ -644,16 +725,16 @@ class RepeaterController:
 
         self.last_audio_time = time.time()
 
-
     def _send_tx_chunk(self, samples: np.ndarray) -> None:
-        # samples is int16
+        # samples should be int16
 
         if (
             self.config.config["audio"].get("limiter_enabled", False)
             or self.config.config["audio"].get("compressor_enabled", False)
             or self.config.config["audio"].get("highpass_enabled", False)
         ):
-            samples = self.dsp_tx.process_int16_to_int16(samples)
+            if np.max(np.abs(samples)) > 16:
+                samples = self.dsp_tx.process_int16_to_int16(samples)
 
         self._update_meter(samples, "tx")
         check_clipping(samples)
@@ -672,6 +753,10 @@ class RepeaterController:
             # Clip to int16 range
             pcm = np.clip(np.asarray(pcm), -32768, 32767).astype(np.int16)
             data = pcm.tobytes()
+            #arr = np.asarray(pcm)
+            #if arr.dtype != np.int16:
+            #    arr = np.clip(arr, -32768, 32767).astype(np.int16, copy=False)
+            #data = arr.tobytes()
         try:
             self.audio_output_queue.put_nowait(data)
         except queue.Full:
@@ -714,7 +799,8 @@ class RepeaterController:
                 self.vox_delay_active = True
                 self.vox_delay_end_time = time.time() + delay_sec
                 self.vox_buffer = []
-                logging.debug(f"[Repeater] VOX carrier delay active for {delay_sec:.2f} seconds (non-blocking)")
+                if logging.getLogger().isEnabledFor(logging.DEBUG):
+                    logging.debug(f"[Repeater] VOX carrier delay active for {delay_sec:.2f} seconds (non-blocking)")
             else:
                 self.vox_delay_active = False
                 self.vox_buffer = []
@@ -723,14 +809,14 @@ class RepeaterController:
 
     def stop_transmission(self):
         # Prime ALSA before tone playback
-        b = np.zeros(self.config.config['audio']['chunk_size'], dtype=np.int16).tobytes()
-        self._send_pcm(b)
+        self._send_pcm(self._silence_bytes)
 
         if self.config.config['repeater']['courtesy_tone_enabled'] and not self.skip_courtesy_tone:
             self.tone_player.play_courtesy_tone()
         else:
             if self.skip_courtesy_tone:
-                logging.debug("Skipping courtesy tone after CW ID.")
+                if logging.getLogger().isEnabledFor(logging.DEBUG):
+                    logging.debug("Skipping courtesy tone after CW ID.")
 
         fade_duration = 0.1
         sample_rate = self.config.config['audio']['sample_rate']
@@ -739,8 +825,7 @@ class RepeaterController:
         
         start = time.time()
         for i in range(num_fade_chunks):
-            b = np.zeros(chunk_size, dtype=np.int16).tobytes()
-            self._send_pcm(b)
+            self._send_pcm(self._silence_bytes)
             pass
           
         self.transmitting = False

@@ -17,33 +17,6 @@ controller_lock = threading.RLock()
 config_locked = True
 _config_lock = threading.Lock()
 
-LIVE_KEYS = {
-    # repeater behavior
-    "audio.input_index",
-    "audio.output_index",
-    "repeater.anti_kerchunk_time",
-    "repeater.carrier_delay",
-    "repeater.courtesy_tone_enabled",
-    "repeater.courtesy_tone_volume",
-    "repeater.tail_time",
-
-    # identification
-    "identification.callsign",
-    "identification.cw_enabled",
-    "identification.cw_pitch",
-    "identification.cw_volume",
-    "identification.cw_wpm",
-    "identification.interval_minutes",
-
-    # TOT
-    "tot.tot_enabled",
-    "tot.tot_lockout_enabled",
-    "tot.tot_lockout_time",
-    "tot.tot_time",
-    "tot.tot_tone_freq",
-    "tot.tot_volume",
-}
-
 def _set_path(d: dict, path: str, value):
     keys = path.split(".")
     cur = d
@@ -165,24 +138,35 @@ def config_live():
     with _config_lock:
         if config_locked:
             return jsonify({"status": "locked"}), 423
-
-        # always update the in-memory config (so Save persists it)
         _set_path(config.config, key, _coerce(value))
-
-        # conservative policy: only LIVE_KEYS apply live
-        if key not in LIVE_KEYS:
-            return jsonify({"status": "restart_required", "key": key}), 409
-
     return jsonify({"status": "ok"})
 
 
-@app.route("/config/save", methods=["POST"])
-def config_save():
+@app.route("/config/apply", methods=["POST"])
+def config_apply():
+    global controller
     try:
         with _config_lock:
             path = _config_path()
             with open(path, "w") as f:
                 yaml.safe_dump(config.config, f, sort_keys=False)
+
+        if controller:
+            with state_lock:
+                controller.cleanup()
+            audio_manager.cleanup()
+
+            input_idx = controller.input_device
+            output_idx = controller.output_device
+            controller = None
+
+            try:
+                controller = RepeaterController(input_idx, output_idx, config, audio_manager)
+                controller.start()
+
+            except Exception as e:
+                return jsonify({"status": "error", "message": f"Failed to restart: {e}"}), 500
+
         return jsonify({"status": "ok"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -337,7 +321,8 @@ def get_status():
             "limiting": limiting,
         })
     except Exception as e:
-        logging.debug("[WebUI] /status failed: %s", e)
+        if logging.getLogger().isEnabledFor(logging.DEBUG):
+            logging.debug("[WebUI] /status failed: %s", e)
         return jsonify({"running": False, "auto_start_error": auto_start_error})
 
 @app.route("/meter")
@@ -374,7 +359,8 @@ def meter():
         })
     
     except Exception as e:
-        logging.debug("[WebUI] /meter failed: %s", e)
+        if logging.getLogger().isEnabledFor(logging.DEBUG):
+            logging.debug("[WebUI] /meter failed: %s", e)
         return jsonify({"running": False, "rx_db": -60.0, "tx_db": -60.0, "clipping": False, "limiting": False}) 
 
 

@@ -11,7 +11,8 @@ class AudioDeviceManager:
         for i in range(self.pa.get_device_count()):
             device_info = self.pa.get_device_info_by_index(i)
             devices.append(device_info)
-            logging.debug(f"Found device: {device_info['name']}")
+            if logging.getLogger().isEnabledFor(logging.DEBUG):
+                logging.debug(f"Found device: {device_info['name']}")
         return devices
 
     def get_input_devices(self):

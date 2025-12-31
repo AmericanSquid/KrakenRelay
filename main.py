@@ -232,7 +232,8 @@ def run_web(args: argparse.Namespace) -> None:
     real_cleanup = am.cleanup
 
     def soft_cleanup():
-        logging.debug("[WebUI] Suppressing audio_manager.cleanup() to allow Start/Stop reuse.")
+        if logging.getLogger().isEnabledFor(logging.DEBUG):
+            logging.debug("[WebUI] Suppressing audio_manager.cleanup() to allow Start/Stop reuse.")
 
     am.cleanup = soft_cleanup  # type: ignore[assignment]
 

@@ -6,7 +6,8 @@ class CM108PTT:
         self.device = device
         self.pin = pin
         self.working = True
-        logging.debug(f"[CM108PTT] Initialized PTT on {self.device}, GPIO pin {self.pin}")
+        if logging.getLogger().isEnabledFor(logging.DEBUG):
+            logging.debug(f"[CM108PTT] Initialized PTT on {self.device}, GPIO pin {self.pin}")
 
     def _set_gpio(self, state):
         if not 1 <= self.pin <= 8:
