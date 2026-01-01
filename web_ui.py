@@ -174,57 +174,59 @@ def config_apply():
 @app.route('/start', methods=['POST'])
 def start_repeater():
     global controller, auto_start_error
-    if controller and getattr(controller, "running", False):
-        return jsonify({"status": "already_running"}), 400
 
-     # Get selected device indices from form data (fallback to config)
-    raw_in = request.form.get("input_index", None)
-    raw_out = request.form.get("output_index", None)
-    audio_cfg = (config.config.get("audio", {}) or {})
+    with state_lock:
+        if controller and getattr(controller, "running", False):
+            return jsonify({"status": "already_running"}), 400
+
+         # Get selected device indices from form data (fallback to config)
+        raw_in = request.form.get("input_index", None)
+        raw_out = request.form.get("output_index", None)
+        audio_cfg = (config.config.get("audio", {}) or {})
  
-    if raw_in is None:
-        raw_in = audio_cfg.get("input_index", None)
-    if raw_out is None:
-        raw_out = audio_cfg.get("output_index", None)
+        if raw_in is None:
+            raw_in = audio_cfg.get("input_index", None)
+        if raw_out is None:
+            raw_out = audio_cfg.get("output_index", None)
 
-    try:
-        input_idx = int(raw_in)
-        output_idx = int(raw_out)
-    except Exception:
-        return jsonify({"status": "error", "message": "Invalid device indices"}), 400
+        try:
+            input_idx = int(raw_in)
+            output_idx = int(raw_out)
+        except Exception:
+            return jsonify({"status": "error", "message": "Invalid device indices"}), 400
 
-    if input_idx < 0 or output_idx < 0:
-        return jsonify({"status": "error", "message": "Invalid device indices"}), 400
+        if input_idx < 0 or output_idx < 0:
+            return jsonify({"status": "error", "message": "Invalid device indices"}), 400
 
-    # Persist chosen devices so auto-start can work after "Start once"
-    try:
-       with _config_lock:
-            cfg_audio = (config.config.setdefault("audio", {}) or {})
-            cfg_audio["input_index"] = int(input_idx)
-            cfg_audio["output_index"] = int(output_idx)
+        # Persist chosen devices so auto-start can work after "Start once"
+        try:
+           with _config_lock:
+                cfg_audio = (config.config.setdefault("audio", {}) or {})
+                cfg_audio["input_index"] = int(input_idx)
+                cfg_audio["output_index"] = int(output_idx)
 
-            # write immediately so reboot auto-start has the saved indices
-            path = _config_path()
-            with open(path, "w") as f:
-                yaml.safe_dump(config.config, f, sort_keys=False)
-    except Exception as e:
-        return jsonify({"status": "error", "message": f"Failed to save device selection: {e}"}), 500
+                # write immediately so reboot auto-start has the saved indices
+                path = _config_path()
+                with open(path, "w") as f:
+                    yaml.safe_dump(config.config, f, sort_keys=False)
+        except Exception as e:
+            return jsonify({"status": "error", "message": f"Failed to save device selection: {e}"}), 500
 
-    config.config['audio']['input_index'] = input_idx
-    config.config['audio']['output_index'] = output_idx
-    config.save_config()
+        config.config['audio']['input_index'] = input_idx
+        config.config['audio']['output_index'] = output_idx
+        config.save_config()
 
-    try:
-        # Initialize and start the RepeaterController in a background thread
-        controller = RepeaterController(input_idx, output_idx, config, audio_manager)
-        controller.start()  # starts the audio thread
-        auto_start_error = None
-    except AudioDeviceError as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-    except Exception as e:
-        return jsonify({"status": "error", "message": f"Failed to start: {e}"}), 500
+        try:
+            # Initialize and start the RepeaterController in a background thread
+            controller = RepeaterController(input_idx, output_idx, config, audio_manager)
+            controller.start()  # starts the audio thread
+            auto_start_error = None
+        except AudioDeviceError as e:
+            return jsonify({"status": "error", "message": str(e)}), 500
+        except Exception as e:
+            return jsonify({"status": "error", "message": f"Failed to start: {e}"}), 500
 
-    return jsonify({"status": "running"})
+        return jsonify({"status": "running"})
 
 @app.route('/stop', methods=['POST'])
 def stop_repeater():
