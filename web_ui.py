@@ -1,7 +1,6 @@
-from flask import Flask, render_template, request, jsonify, Response
+from flask import Flask, render_template, request, jsonify
 import threading, time
 import yaml
-import json
 import math
 import logging
 from collections import deque

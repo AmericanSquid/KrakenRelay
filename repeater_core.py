@@ -7,7 +7,7 @@ from morse_code import ScheduleID, MorseCode
 from ptt_controller import PTTManager
 from tone_control import ToneGenerator, TonePlayer
 from tot_manager import TOTManager
-from audio_utils import get_dbfs, check_clipping, calculate_db_level, check_squelch
+from audio_utils import get_dbfs, check_clipping, calculate_db_level
 from kraken_dsp.kraken_dsp_wrapper import DSPChain
 from collections import deque
 
@@ -666,8 +666,13 @@ class RepeaterController:
         except queue.Empty:
             return
         samples = np.frombuffer(data, dtype=np.int16).astype(np.float32)
-        self.current_rms = float(np.sqrt(np.mean(samples **2)))
-        
+
+        if samples.size == 0:
+            self.current_rms = 0.0
+        else:
+            samples = np.nan_to_num(samples, nan=0.0, posinf=0.0, neginf=0.0)
+            self.current_rms = float(np.sqrt(np.mean(samples * samples)))
+
         self._update_meter(samples, "rx")
         # Check squelch first
         now = time.time()
@@ -709,8 +714,10 @@ class RepeaterController:
                 #if np.max(np.abs(samples)) > 16:
                 samples = self.dsp_rx.process_int16_to_int16(samples)
 
-            self.current_rms = np.sqrt(np.mean(samples**2))
-            
+            s = np.asarray(samples, dtype=np.float32)
+            s = np.nan_to_num(s, nan=0.0, posinf=0.0, neginf=0.0)
+            self.current_rms = float(np.sqrt(np.mean(s*s)))
+
             if not self.transmitting:
                 if just_opened:
                     logging.info("Squelch opened - Starting Tx")

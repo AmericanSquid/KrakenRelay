@@ -28,9 +28,6 @@ class MorseCode:
         t = np.arange(length) / self.sample_rate
         return (np.sin(2 * np.pi * self.frequency * t) * self.volume * 32767).astype(np.int16)
 
-    def silence(self, length):
-        return np.zeros(length, dtype=np.int16)
-
     def generate_chunks(self, text, chunk_size):
         """Yield fixed-size int16 PCM chunks for real-time playback (timing-accurate)."""
         if chunk_size <= 0:
@@ -73,33 +70,6 @@ class MorseCode:
             pad = np.zeros(chunk_size - buf.size, dtype=np.int16)
             yield np.concatenate((buf, pad))
 
-#    def generate_chunks(self, text, chunk_size):
-#        """Yield int16 PCM chunks suitable for real-time playback."""
-#        for char in text.upper():
-#            if char not in MORSE_CODE:
-#                continue
-#            for symbol in MORSE_CODE[char]:
-#                tone = self.tone(self.dot_len if symbol == "." else self.dash_len)
-#                yield from self._chunk(tone, chunk_size)
-#                # Intra-symbol space
-#                yield from self._chunk(self._intra, chunk_size)
-#            # Inter-letter space
-#            yield from self._chunk(self._inter_char, chunk_size)
-
-    def _chunk(self, data, chunk_size):
-#        for i in range(0, len(data), chunk_size):
-#            chunk = data[i:i + chunk_size]
-#            yield chunk
-        if chunk_size <= 0:
-            raise ValueError("chunk_size must be > 0")
-        n = len(data)
-        for i in range(0, n, chunk_size):
-            chunk = data[i:i + chunk_size]
-            if len(chunk) < chunk_size:
-                pad = np.zeros(chunk_size - len(chunk), dtype=np.int16)
-                chunk = np.concatenate((chunk, pad))
-            yield chunk
-   
 class ScheduleID:
     def __init__(self, controller, config, tx_start_fn, tx_stop_fn, send_pcm_fn, tx_state_fn, set_skip_courtesy_fn):
         self.config = config

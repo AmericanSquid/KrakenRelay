@@ -1,6 +1,5 @@
 import yaml
 import logging
-import os
 
 class ConfigManager:
     def __init__(self, config_path='config.yaml'):

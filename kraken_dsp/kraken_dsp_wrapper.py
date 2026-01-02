@@ -26,7 +26,7 @@ class DSPChain:
         release_ms=200.0,
         makeup_db=0.0
     ):
-        dt = chunk_len / sample_rate
+        dt = 1 / sample_rate
         att = _coeff(dt, attack_ms)
         rel = _coeff(dt, release_ms)
         makeup = 10.0 ** (makeup_db / 20.0)

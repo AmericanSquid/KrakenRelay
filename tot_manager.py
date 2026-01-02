@@ -4,9 +4,7 @@ import logging
 class TOTManager:
     def __init__(self, config, ptt_unkey_fn):
         self.config = config
-
         self.ptt_unkey_fn = ptt_unkey_fn
-
         self.tot_enabled = config.config['tot']['tot_enabled']
         self.tot_limit = config.config['tot']['tot_time']
         self.lockout_enabled = config.config['tot']['tot_lockout_enabled']
@@ -27,10 +25,6 @@ class TOTManager:
             return 0
         return time.time() - self.timer_start
     
-    def exceeded(self):
-        return self.tot_enabled and self.update() >= self.tot_limit
-    
-
     def check_timeout(self, is_transmitting):
         if (not self.tot_enabled) or (self.tx_start_time is None) or (not is_transmitting):
             return False

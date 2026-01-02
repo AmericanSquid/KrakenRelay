@@ -5,7 +5,6 @@ import logging
 import signal
 import threading
 from typing import Optional
-
 from config_manager import ConfigManager
 from audio_manager import AudioDeviceManager, AudioDeviceError
 from repeater_core import RepeaterController

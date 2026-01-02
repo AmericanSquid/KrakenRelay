@@ -31,16 +31,6 @@ class AudioDeviceManager:
                 devices.append(device_info['name'])
         return devices
 
-    
-    def verify_audio_chain(self):
-        devices = self.list_devices()
-        logging.info("Active audio devices:")
-        for device in devices:
-            logging.info(f"Index {device['index']}: {device['name']}")
-            logging.info(f"Max Input Channels: {device['maxInputChannels']}")
-            logging.info(f"Max Output Channels: {device['maxOutputChannels']}")
-            logging.info(f"Default Sample Rate: {device['defaultSampleRate']}")
-
     def find_device_by_name(self, name):
         devices = self.list_devices()
         for device in devices:

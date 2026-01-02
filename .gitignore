@@ -1,0 +1,14 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+venv/
+.venv/
+*.log
+*.save
+*.bak
+*.yaml
+kraken_dsp/_kraken_dsp.c
+kraken_dsp/*.o
+kraken_dsp/*.so
+kraken_dsp/__pycache__
