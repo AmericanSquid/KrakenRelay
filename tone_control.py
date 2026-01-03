@@ -43,30 +43,34 @@ class ToneGenerator:
     def generate_courtesy_tone(self):
         volume=_tone_vol(self.config.config['repeater'].get('courtesy_tone_volume', 100))
         sample_rate = self.config.config['audio']['sample_rate']
-        duration = 0.12  # a little longer for clarity
-        frequency = 523
 
-        t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
-        #tone = np.sin(2 * np.pi * frequency * t)
-        # "boop" = short down-chirp + quick decay
-        f0 = self.config.config['repeater'].get('courtesy_tone_f_start', 520)
-        f1 = self.config.config['repeater'].get('courtesy_tone_f_end', 390)
+        f1 = self.config.config['repeater'].get('courtesy_tone_f_start', 700)
+        f2 = self.config.config['repeater'].get('courtesy_tone_f_end', 520)
+        pip_dur = 0.040
+        gap = 0.025
 
-        k = (f1 - f0) / max(duration, 1e-6)  # Hz/sec
-        phase = 2 * np.pi * (f0 * t + 0.5 * k * t * t)
-        tone = np.sin(phase)
+        def pip(freq):
+            t = np.linspace(0, pip_dur, int(sample_rate * pip_dur), endpoint=False)
+            x = np.sin(2 * np.pi * freq * t)
 
-        # quick decay so it doesn't feel like a lab tone
-        tone *= np.exp(-5.0 * t / max(duration, 1e-6))
+            a = int(sample_rate * 0.004)
+            r = int(sample_rate * 0.010)
+            x[:a] *= np.linspace(0, 1, a)
+            x[-r:] *= np.linspace(1, 0, r)
 
-        # tiny fade to prevent click
-        fade_len = int(sample_rate * 0.005)  # 5ms
-        fade = np.linspace(0, 1, fade_len)
-        tone[:fade_len] *= fade
-        tone[-fade_len:] *= fade[::-1]
+            return x
 
-        logging.info(f"Generated courtesy tone at {frequency} Hz with volume {volume}")
-        return (tone * volume * 32767).astype(np.int16)
+        tone = np.concatenate([
+            pip(f1),
+            np.zeros(int(sample_rate * gap)),
+            pip(f2)
+        ])
+
+        pcm = tone * volume
+        pcm = np.clip(pcm, -1.0, 1.0) 
+
+        logging.info(f"Generated courtesy tone at {f1} Hz, {f2} Hz with volume {volume}")
+        return (pcm * 32767).astype(np.int16)
         
 
     def generate_tot_tone(self):

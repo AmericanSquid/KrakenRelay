@@ -355,15 +355,31 @@ class RepeaterController:
     def output_consumer(self):
         while not self._output_stop_event.is_set():
             try:
-                chunk = self.audio_output_queue.get(timeout=0.1)
+                chunk = self.audio_output_queue.get(timeout=0.02)  # shorter than 0.1 helps
             except queue.Empty:
+                # If we requested unkey and there's nothing left to play, unkey now.
+                if self._unkey_after_drain and self.audio_output_queue.empty():
+                    self._unkey_after_drain = False
+                    self.transmitting = False
+                    self.skip_courtesy_tone = False
+                    self.ptt_manager.safe_ptt_unkey()
+                    logging.info("Transmitter unkeyed (after drain).")
+                    continue
+
+                # If we're keyed, keep the audio device fed to avoid underruns.
+                if getattr(self, "transmitting", False):
+                    try:
+                        self.output_stream.write(self._silence_bytes)
+                    except Exception as e:
+                        logging.warning(f"[Output] Primary silence write failed: {e}")
+                    self._send_to_secondary(self._silence_bytes)
                 continue
-            
+
             try:
                 self.output_stream.write(chunk)
             except Exception as e:
                 logging.warning(f"[Output] Primary output write failed: {e}")
-            
+
             self._send_to_secondary(chunk)
 
             # If we requested unkey, do it only after all queued audio has played
@@ -493,21 +509,30 @@ class RepeaterController:
 
             self.tot_manager.check_lockout_expired()
             if self._cw_gen is not None:
-                try:
-                    _ = self.audio_input_queue.get(timeout=0.2)
-                except queue.Empty:
-                    pass
+                sr = int(self.config.config["audio"]["sample_rate"])
+                frame_sec = float(self.chunk_size) / float(sr)
+
+                now_m = time.monotonic()
+                next_t = getattr(self, "_cw_next_t", None)
+                if next_t is None:
+                    next_t = now_m
+
+                if now_m < next_t:
+                    time.sleep(next_t - now_m)
+
                 try:
                     chunk = next(self._cw_gen)
                     self._send_pcm(chunk)
+                    self._cw_next_t = next_t + frame_sec
                 except StopIteration:
                     self._cw_gen = None
+                    self._cw_next_t = None
                     self.skip_courtesy_tone = True
                     if getattr(self, "transmitting", False):
                         self.stop_transmission()
 
-                self._drain_input_queue(max_frames=3)
                 continue
+
             try:
                 self.process_audio()
                 if self._manual_id_event.is_set():
@@ -833,8 +858,14 @@ class RepeaterController:
         try:
             self.audio_output_queue.put_nowait(data)
         except queue.Full:
-            logging.warning(f"[Output] Output queue full, dropping audio frame.")
-    
+            if self._cw_gen is not None:
+                try:
+                    self.audio_output_queue.put(data, timeout=0.2)
+                except:
+                    logging.warning(f"[Output] Output queue full, dropping audio frame.")
+            else:
+                logging.warning("[Output] Output queue full, dropping audio frame.")    
+
     def _update_meter(self, samples: np.ndarray, direction: str):
         db = get_dbfs(samples)
         db = max(-60.0, float(db))
@@ -909,7 +940,8 @@ class RepeaterController:
 
         logging.info("Transmission stopped with fade-out")
 
-        self.schedule_id.mark_post_tx()
+        if not self.skip_courtesy_tone:
+            self.schedule_id.mark_post_tx()
         self._unkey_after_drain = True
         #self.skip_courtesy_tone = False
         #self.ptt_manager.safe_ptt_unkey()
