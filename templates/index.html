@@ -63,12 +63,8 @@
       width: 34px;
       height: 34px;
       border-radius: 10px;
+      background: linear-gradient(135deg, rgba(162,89,255,1), rgba(55,255,248,1));
       box-shadow: 0 0 18px rgba(162,89,255,.3);
-      background-image: url("/static/logo.png");
-      background-size: contain;
-      background-repeat: no-repeat;
-      background-position: center;
-      flex-shrink: 0;
     }
     .brand h1{
       margin:0;
@@ -160,16 +156,6 @@
       padding: 14px;
     }
 
-    /* Sticky sidebar (desktop) */
-    .sidebar{
-      position: sticky;
-      top: 86px; /* account for sticky header */
-      align-self: start;
-    }
-    @media (max-width: 980px){
-      .sidebar{ position: static; }
-    }
-
     /* Header controls in config card */
     .hdr-controls{
       display:flex;
@@ -256,193 +242,121 @@
       flex-wrap: wrap;
     }
     button{
-      cursor:pointer;
-      border: 1px solid rgba(255,255,255,.12);
-      background: rgba(0,0,0,.22);
-      color: var(--text);
       padding: 10px 12px;
       border-radius: 12px;
-      transition: transform .05s ease, background .2s ease, border-color .2s ease;
+      border: 1.5px solid rgba(255,255,255,.18);
+      background: rgba(0,0,0,.18);
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 700;
+      letter-spacing: .2px;
     }
-    button:active{ transform: scale(.98); }
-    button:disabled{
-      opacity: .45;
-      cursor:not-allowed;
-    }
+    button:hover{ background: rgba(0,0,0,.28); }
+    button:disabled{ opacity: .5; cursor: not-allowed; }
+
     .btn-primary{
-      background: linear-gradient(135deg, rgba(162,89,255,.85), rgba(55,255,248,.55));
-      border-color: rgba(162,89,255,.4);
+      border-color: rgba(55,255,248,.55);
+      box-shadow: 0 0 0 1px rgba(55,255,248,.12), 0 0 18px rgba(55,255,248,.08);
     }
     .btn-danger{
-      background: rgba(255,82,82,.18);
-      border-color: rgba(255,82,82,.35);
+      border-color: rgba(255,82,82,.60);
+      box-shadow: 0 0 0 1px rgba(255,82,82,.14), 0 0 18px rgba(255,82,82,.08);
     }
     .btn-ghost{
-      background: rgba(255,255,255,.06);
+      color: var(--muted);
     }
 
     /* Meter */
     .meterWrap{
       display:flex;
-      gap: 12px;
-      align-items:stretch;
+      gap: 14px;
+      align-items:flex-start;
     }
     .meter{
-      width: 16px;
-      border-radius: 999px;
-      background: rgba(0,0,0,.25);
-      border: 1px solid rgba(255,255,255,.10);
+      width: 34px;
+      height: 130px;
+      border-radius: 12px;
+      background: rgba(0,0,0,.35);
+      border: 1px solid rgba(255,255,255,.12);
       overflow:hidden;
-      position: relative;
+      position:relative;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.03);
     }
     .meterFill{
       position:absolute;
-      left:0; right:0;
-      bottom:0;
+      bottom: 0;
+      left: 0;
+      width: 100%;
       height: 0%;
-      background: linear-gradient(180deg, rgba(61,255,71,1), rgba(255,204,51,1), rgba(255,82,82,1));
-      transition: height .05s linear;
+      background: linear-gradient(to top, #00ff00, #ffff00 80%, #ff0000);
     }
     .meterMeta{
-      flex:1;
+      flex: 1;
       min-width: 0;
     }
     .metaLine{
+      font-size: 12px;
+      color: var(--muted);
+      margin: 2px 0;
       display:flex;
+      gap: 8px;
       align-items:center;
-      justify-content:space-between;
-      gap: 12px;
       flex-wrap: wrap;
     }
-    .bar{
-      height: 10px;
-      border-radius: 999px;
-      background: rgba(0,0,0,.25);
-      border: 1px solid rgba(255,255,255,.10);
-      overflow:hidden;
-      margin-top: 6px;
-    }
-    .bar > div{
-      height:100%;
-      width:0%;
-      background: linear-gradient(90deg, rgba(55,255,248,.8), rgba(162,89,255,.8));
-      transition: width .1s linear;
-    }
-
     .badge{
       display:inline-flex;
       align-items:center;
       gap: 6px;
-      font-size: 11px;
-      padding: 5px 8px;
+      padding: 6px 10px;
       border-radius: 999px;
       border: 1px solid rgba(255,255,255,.12);
       background: rgba(0,0,0,.22);
-      color: rgba(255,255,255,.9);
-    }
-    .badge.clip{
-      border-color: rgba(255,82,82,.35);
-      color: rgba(255,82,82,.95);
-    }
-    .badge.limit{
-      border-color: rgba(255,204,51,.35);
-      color: rgba(255,204,51,.95);
-    }
-    .hidden{ display:none; }
-
-    /* Section Title */
-    .secTitle{
-      margin: 10px 0 8px 0;
+      color: var(--muted);
       font-size: 12px;
-      color: rgba(255,255,255,.85);
+      font-weight: 700;
+    }
+    .badge.clip{ border-color: rgba(255,82,82,.55); color: rgba(255,82,82,.95); }
+    .badge.limit{ border-color: rgba(255,204,51,.55); color: rgba(255,204,51,.95); }
+    .badge.hidden{ display:none; }
+
+    /* Progress bars */
+    .bar{
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(0,0,0,.35);
+      border: 1px solid rgba(255,255,255,.10);
+      overflow:hidden;
+      margin-top: 8px;
+    }
+    .bar > div{
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, rgba(162,89,255,1), rgba(55,255,248,1));
+    }
+
+    /* Section titles */
+    .secTitle{
+      margin: 0 0 10px;
+      font-size: 12px;
+      color: rgba(162,89,255,.95);
       letter-spacing: .3px;
       text-transform: uppercase;
     }
 
     .footer{
-      margin-top: 10px;
-      padding-top: 10px;
-      border-top: 1px solid rgba(255,255,255,.07);
-      font-size: 12px;
-      color: var(--muted);
+      margin-top: 12px;
+      color: rgba(255,255,255,.38);
+      font-size: 11px;
       display:flex;
       justify-content:space-between;
       gap: 12px;
       flex-wrap: wrap;
     }
 
-    /* Visual hint for fields with pending (unapplied) changes */
-    .pending-changes,
+    /* Visual hint for fields that require restart */
     .needs-restart{
       outline: 2px solid rgba(255,204,51,.55);
       box-shadow: 0 0 0 3px rgba(255,204,51,.10);
-    }
-/* ===== Tabs (Config) ===== */
-    .tabs{
-      display:flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-bottom: 12px;
-    }
-    .tabbtn{
-      padding: 7px 10px;
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,.12);
-      background: rgba(0,0,0,.18);
-      color: rgba(255,255,255,.72);
-      font-size: 12px;
-      font-weight: 800;
-      letter-spacing: .2px;
-      cursor: pointer;
-    }
-    .tabbtn.active{
-      background: linear-gradient(135deg, rgba(162,89,255,.45), rgba(55,255,248,.20));
-      border-color: rgba(55,255,248,.35);
-      color: rgba(255,255,255,.95);
-      box-shadow: 0 0 0 1px rgba(55,255,248,.08);
-    }
-    .tabpanel{ display:none; }
-    .tabpanel.active{ display:block; }
-
-    /* ===== Logs (Sidebar) ===== */
-    .logs{
-      margin-top: 14px;
-      padding-top: 12px;
-      border-top: 1px solid rgba(255,255,255,.07);
-    }
-    .logs summary{
-      cursor: pointer;
-      list-style: none;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap: 10px;
-      user-select:none;
-      font-size: 12px;
-      font-weight: 900;
-      color: rgba(255,255,255,.90);
-      letter-spacing: .2px;
-    }
-    .logs summary::-webkit-details-marker{ display:none; }
-    .logs-actions{
-      display:flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-top: 10px;
-      margin-bottom: 10px;
-    }
-    .logs-box{
-      max-height: 180px;
-      overflow: auto;
-      padding: 10px;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,.10);
-      background: rgba(0,0,0,.25);
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      font-size: 11px;
-      line-height: 1.35;
-      color: rgba(255,255,255,.78);
-      white-space: pre-wrap;
     }
   </style>
 </head>
@@ -472,6 +386,11 @@
         <span class="pill"><span class="dot tx" id="tx-dot"></span> TX</span>
         <span class="pill" id="run-pill">Stopped</span>
       </div>
+      
+      <div class="metaLine" id="auto-start-error" style="color: #ff5252; font-weight: bold; display: none;">
+        <!-- Error will show here -->
+      </div>
+
     </div>
   </div>
 
@@ -481,15 +400,13 @@
       <div class="grid">
 
         <!-- LEFT: Live control -->
-        <div class="card sidebar">
+        <div class="card">
           <div class="card-hd">
             <h2>Live Status</h2>
             <span class="pill" id="ptt-pill">PTT: Not Started</span>
           </div>
 
           <div class="card-bd">
-            <div class="metaLine" id="auto-start-error" style="color: var(--bad); font-weight: 800; display: none; margin-bottom: 10px;"></div>
-
             <div class="meterWrap">
               <div class="meter">
                 <div class="meterFill" id="level-bar"></div>
@@ -525,9 +442,8 @@
             <div class="field">
               <label for="input-device">Input Device</label>
               <select id="input-device" name="input_index">
-                {% set sel_in = (audio.get("input_index")|string) %}
                 {% for dev in input_devices %}
-                  <option value="{{ dev.index }}" {% if (dev.index|string) == sel_in %}selected{% endif %}>{{ dev.name }}</option>
+                  <option value="{{ dev.index }}">{{ dev.name }}</option>
                 {% endfor %}
               </select>
             </div>
@@ -535,9 +451,8 @@
             <div class="field">
               <label for="output-device">Output Device</label>
               <select id="output-device" name="output_index">
-                {% set sel_out = (audio.get("output_index")|string) %}
                 {% for dev in output_devices %}
-                  <option value="{{ dev.index }}" {% if (dev.index|string) == sel_out %}selected{% endif %}>{{ dev.name }}</option>
+                  <option value="{{ dev.index }}">{{ dev.name }}</option>
                 {% endfor %}
               </select>
             </div>
@@ -549,21 +464,6 @@
               <button type="button" id="test-ptt" class="btn-ghost">Test PTT</button>
             </div>
 
-            <!-- Collapsible logs/diagnostics panel (under Live Status) -->
-            <details class="logs" id="logs-details">
-              <summary>
-                <span>Recent Events</span>
-                <span class="badge" id="logs-paused-badge" style="display:none;">Paused</span>
-              </summary>
-
-              <div class="logs-actions">
-                <button type="button" id="logs-clear-btn" class="mini-btn btn-ghost">Clear</button>
-                <button type="button" id="logs-pause-btn" class="mini-btn btn-ghost">Pause</button>
-              </div>
-
-              <pre class="logs-box" id="logs-box">Open to load…</pre>
-            </details>
-
             <div class="footer">
               <span id="status-note">Status updates every 500ms</span>
               <span>Open Source Repeater Controller by American Squid/K3AYV</span>
@@ -572,310 +472,271 @@
         </div>
 
         <!-- RIGHT: Settings -->
-        <div class="card" id="config-card">
+        <div class="card">
           <div class="card-hd">
             <h2>Configuration</h2>
 
             <div class="hdr-controls">
-              <span class="pill warn" id="pending-badge" style="display:none;">Pending changes</span>
+              <span class="pill warn" id="restart-badge" style="display:none;">Restart required</span>
               <span class="pill" id="save-status" style="display:none;"></span>
-              <button type="button" id="apply-btn" class="mini-btn btn-primary">Apply Changes</button>
+
+              <button type="button" id="save-btn" class="mini-btn btn-primary">Save</button>
 
               <label class="pill lockpill" title="Unlock to edit config">
                 <input type="checkbox" id="cfg-lock" checked>
                 <span id="lock-state" style="font-weight:800;">LOCKED</span>
               </label>
+              <label class="pill lockpill" title="Check to enable auto-start">
+               <input type="checkbox" id="auto-start" data-key="repeater.auto_start"
+                {% if repeater.get('auto_start', False) %}checked{% endif %}>
+               <span>Auto-Start</span>
+               </label>
             </div>
           </div>
 
           <div class="card-bd">
 
-            <!-- Config Tabs -->
-            <div class="tabs" id="config-tabs">
-              <button type="button" class="tabbtn" data-tab="audio">Audio</button>
-              <button type="button" class="tabbtn" data-tab="repeater">Repeater</button>
-              <button type="button" class="tabbtn" data-tab="id">ID</button>
-              <button type="button" class="tabbtn" data-tab="tot">TOT</button>
-              <button type="button" class="tabbtn" data-tab="ptt">PTT</button>
+            <!-- AUDIO -->
+            <div class="secTitle">Audio</div>
+
+            <div class="row">
+              <div class="field">
+                <label for="sample-rate">Sample Rate (Hz)</label>
+                <select id="sample-rate" data-key="audio.sample_rate">
+                  {% set sr = audio.get('sample_rate', 48000) %}
+                  <option value="8000"  {% if sr == 8000 %}selected{% endif %}>8000</option>
+                  <option value="16000" {% if sr == 16000 %}selected{% endif %}>16000</option>
+                  <option value="44100" {% if sr == 44100 %}selected{% endif %}>44100</option>
+                  <option value="48000" {% if sr == 48000 %}selected{% endif %}>48000</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="chunk-size">Chunk Size (samples)</label>
+                <input type="number" id="chunk-size" data-key="audio.chunk_size" min="256" step="1"
+                       value="{{ audio.get('chunk_size', 1920) }}">
+              </div>
             </div>
 
-            <!-- AUDIO TAB -->
-            <div class="tabpanel" data-tab="audio">
-              <div class="secTitle">Audio</div>
-
-              <div class="row">
-                <div class="field">
-                  <label for="sample-rate">Sample Rate (Hz)</label>
-                  <select id="sample-rate" data-key="audio.sample_rate">
-                    {% set sr = audio.get('sample_rate', 48000) %}
-                    <option value="8000"  {% if sr == 8000 %}selected{% endif %}>8000</option>
-                    <option value="16000" {% if sr == 16000 %}selected{% endif %}>16000</option>
-                    <option value="44100" {% if sr == 44100 %}selected{% endif %}>44100</option>
-                    <option value="48000" {% if sr == 48000 %}selected{% endif %}>48000</option>
-                  </select>
-                </div>
-
-                <div class="field">
-                  <label for="chunk-size">Chunk Size (samples)</label>
-                  <input type="number" id="chunk-size" data-key="audio.chunk_size" min="256" step="1"
-                         value="{{ audio.get('chunk_size', 1920) }}">
-                </div>
+            <div class="row">
+              <div class="field">
+                <label for="squelch">Squelch (dB)</label>
+                <input type="range" id="squelch" data-key="audio.squelch_threshold" min="-60" max="-20"
+                       value="{{ audio.get('squelch_threshold', -40) }}" />
+                <div class="metaLine">Current: <span id="squelch-value">{{ audio.get('squelch_threshold', -40) }} dB</span></div>
               </div>
 
-              <div class="row">
-                <div class="field">
-                  <label for="squelch">Squelch (dB)</label>
-                  <input type="range" id="squelch" data-key="audio.squelch_threshold" min="-60" max="-20"
-                         value="{{ audio.get('squelch_threshold', -40) }}" />
-                  <div class="metaLine">Current: <span id="squelch-value">{{ audio.get('squelch_threshold', -40) }} dB</span></div>
-                </div>
-
-                <div class="field">
-                  <label>High-pass Filter</label>
-                  <div class="toggle">
-                    <input type="checkbox" id="highpass" data-key="audio.highpass_enabled"
-                      {% if audio.get('highpass_enabled', True) %}checked{% endif %}>
-                    <span>Enable</span>
-                  </div>
-
-                  <label for="highpass-cutoff" style="margin-top:10px;">Cutoff (Hz)</label>
-                  <input type="range" id="highpass-cutoff" data-key="audio.highpass_cutoff" min="100" max="1200" step="10"
-                         value="{{ audio.get('highpass_cutoff', 300) }}" />
-                  <div class="metaLine">Current: <span id="highpass-value">{{ audio.get('highpass_cutoff', 300) }} Hz</span></div>
-                </div>
-              </div>
-
-              <div class="row">
-                <div class="field">
-                  <label>Limiter</label>
-                  <div class="toggle">
-                    <input type="checkbox" id="limiter" data-key="audio.limiter_enabled"
-                      {% if audio.get('limiter_enabled', True) %}checked{% endif %}>
-                    <span>Enable</span>
-                  </div>
-
-                  <label for="limiter-threshold" style="margin-top:10px;">Threshold (0–1)</label>
-                  <input type="range" id="limiter-threshold" data-key="audio.limiter_threshold" min="0.10" max="1.00" step="0.005"
-                         value="{{ audio.get('limiter_threshold', 0.85) }}" />
-                  <div class="metaLine">Current: <span id="limiter-value">{{ audio.get('limiter_threshold', 0.85) }}</span></div>
-                </div>
-                <div class="field">
-                <label>Compressor</label>
+              <div class="field">
+                <label>High-pass Filter</label>
                 <div class="toggle">
-                  <input type="checkbox" id="compressor" data-key="audio.compressor_enabled"
-                    {% if audio.get('compressor_enabled', False) %}checked{% endif %}>
+                  <input type="checkbox" id="highpass" data-key="audio.highpass_enabled"
+                    {% if audio.get('highpass_enabled', True) %}checked{% endif %}>
                   <span>Enable</span>
                 </div>
-                <label for="compressor-strength" style="margin-top:10px;">
-                  Leveling Strength (0–100%)
-                </label>
-                <input
-                  type="range"
-                  id="compressor-strength"
-                  data-key="audio.compressor_strength"
-                  min="0"
-                  max="100"
-                  step="1"
-                  value="{{ audio.get('compressor_strength', 50) }}"
-                />
+
+                <label for="highpass-cutoff" style="margin-top:10px;">Cutoff (Hz)</label>
+                <input type="range" id="highpass-cutoff" data-key="audio.highpass_cutoff" min="100" max="1000"
+                       value="{{ audio.get('highpass_cutoff', 300) }}"
+                       {% if not audio.get('highpass_enabled', True) %}disabled{% endif %} />
+                <div class="metaLine">Current: <span id="highpass-value">{{ audio.get('highpass_cutoff', 300) }} Hz</span></div>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="field">
+                <label>Limiter</label>
+                <div class="toggle">
+                  <input type="checkbox" id="limiter-enabled" data-key="audio.limiter_enabled"
+                    {% if audio.get('limiter_enabled', True) %}checked{% endif %}>
+                  <span>Enable</span>
+                </div>
+
+                <label for="limiter-threshold" style="margin-top:10px;">Threshold (0–1)</label>
+                <input type="range" id="limiter-threshold" data-key="audio.limiter_threshold" min="0.10" max="1.00" step="0.001"
+                       value="{{ audio.get('limiter_threshold', 0.85) }}" />
                 <div class="metaLine">
-                  Current:
-                  <span id="compressor-value">
-                    {{ audio.get('compressor_strength', 50) }}%
-                  </span>
+                  Current: <span id="limiter-value">{{ '%.3f' % audio.get('limiter_threshold', 0.85) }}</span>
                 </div>
               </div>
-              
-              <div class="row">
-                <div class="field">
-                  <label>Dual Output</label>
-                  <div class="toggle">
-                    <input type="checkbox" id="dual-output" data-key="audio.dual_output"
-                      {% if audio.get('dual_output', False) %}checked{% endif %}>
-                    <span>Enable</span>
-                  </div>
 
-                  <label for="output-device-2" style="margin-top:10px;">Output Device 2</label>
-                  <select id="output-device-2" data-key="audio.output_device_2"
-                          {% if not audio.get('dual_output', False) %}disabled{% endif %}>
-                    {% set od2 = audio.get('output_device_2', 0) %}
-                    {% for dev in output_devices %}
-                      <option value="{{ dev.index }}" {% if dev.index == od2 %}selected{% endif %}>{{ dev.name }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
-              </div>
-            </div>
-          </div>
-
-            <!-- REPEATER TAB -->
-            <div class="tabpanel" data-tab="repeater">
-              <div class="secTitle">Repeater</div>
-
-              <div class="row">
-                <div class="field">
-                  <label for="tail-time">Hang Time (s)</label>
-                  <input type="number" step="0.1" id="tail-time" data-key="repeater.tail_time"
-                         value="{{ repeater.get('tail_time', 2.0) }}" />
+              <div class="field">
+                <label>Dual Output</label>
+                <div class="toggle">
+                  <input type="checkbox" id="dual-output" data-key="audio.dual_output"
+                    {% if audio.get('dual_output', False) %}checked{% endif %}>
+                  <span>Enable second output</span>
                 </div>
 
-                <div class="field">
-                  <label for="carrier-delay">Carrier Delay (s)</label>
-                  <input type="number" step="0.1" id="carrier-delay" data-key="repeater.carrier_delay"
-                         value="{{ repeater.get('carrier_delay', 0.0) }}" />
-                </div>
-
-                <div class="field">
-                  <label for="kerchunk">Anti-Kerchunk (s)</label>
-                  <input type="number" step="0.1" id="kerchunk" data-key="repeater.anti_kerchunk_time"
-                         value="{{ repeater.get('anti_kerchunk_time', 0.0) }}" />
-                </div>
-
-                <div class="field">
-                  <label>Courtesy Tone</label>
-                  <div class="toggle">
-                    <input type="checkbox" id="courtesy-tone" data-key="repeater.courtesy_tone_enabled"
-                      {% if repeater.get('courtesy_tone_enabled', True) %}checked{% endif %}>
-                    <span>Enable</span>
-                  </div>
-
-                  <label for="courtesy-vol" style="margin-top:10px;">Courtesy Volume (0–100)</label>
-                  <input type="range" id="courtesy-vol" data-key="repeater.courtesy_tone_volume" min="0" max="100" step="1"
-                         value="{{ repeater.get('courtesy_tone_volume', 80) }}" />
-                  <div class="metaLine">Current: <span id="courtesy-vol-value">{{ repeater.get('courtesy_tone_volume', 80) }}</span></div>
-                </div>
-
-                <div class="field">
-                  <label>Auto-Start on Boot</label>
-                  <div class="toggle">
-                    <input type="checkbox" id="auto-start" data-key="repeater.auto_start"
-                      {% if repeater.get('auto_start', False) %}checked{% endif %}>
-                    <span>Enable</span>
-                  </div>
-                </div>
+                <label for="output-device-2" style="margin-top:10px;">Output Device 2</label>
+                <select id="output-device-2" data-key="audio.output_device_2"
+                        {% if not audio.get('dual_output', False) %}disabled{% endif %}>
+                  {% set od2 = audio.get('output_device_2', 0) %}
+                  {% for dev in output_devices %}
+                    <option value="{{ dev.index }}" {% if dev.index == od2 %}selected{% endif %}>{{ dev.name }}</option>
+                  {% endfor %}
+                </select>
               </div>
             </div>
 
-            <!-- ID TAB -->
-            <div class="tabpanel" data-tab="id">
-              <div class="secTitle">Identification</div>
+            <div style="height: 12px;"></div>
 
-              <div class="row">
-                <div class="field">
-                  <label for="callsign">Callsign</label>
-                  <input type="text" id="callsign" data-key="identification.callsign"
-                         value="{{ ident.get('callsign', '') }}" style="text-transform:uppercase;">
+            <!-- REPEATER -->
+            <div class="secTitle">Repeater</div>
+
+            <div class="row">
+              <div class="field">
+                <label for="tail-time">Hang Time (s)</label>
+                <input type="number" step="0.1" id="tail-time" data-key="repeater.tail_time"
+                       value="{{ repeater.get('tail_time', 2.0) }}" />
+              </div>
+
+              <div class="field">
+                <label for="carrier-delay">Carrier Delay (s)</label>
+                <input type="number" step="0.1" id="carrier-delay" data-key="repeater.carrier_delay"
+                       value="{{ repeater.get('carrier_delay', 0.0) }}" />
+              </div>
+
+              <div class="field">
+                <label for="kerchunk">Anti-Kerchunk (s)</label>
+                <input type="number" step="0.1" id="kerchunk" data-key="repeater.anti_kerchunk_time"
+                       value="{{ repeater.get('anti_kerchunk_time', 0.0) }}" />
+              </div>
+
+              <div class="field">
+                <label>Courtesy Tone</label>
+                <div class="toggle">
+                  <input type="checkbox" id="courtesy-tone" data-key="repeater.courtesy_tone_enabled"
+                    {% if repeater.get('courtesy_tone_enabled', True) %}checked{% endif %}>
+                  <span>Enable</span>
                 </div>
 
-                <div class="field">
-                  <label for="id-interval">ID Interval (min)</label>
-                  <input type="number" id="id-interval" data-key="identification.interval_minutes" min="1" max="60"
-                         value="{{ ident.get('interval_minutes', 10) }}">
-                </div>
-
-                <div class="field">
-                  <label>CW ID</label>
-                  <div class="toggle">
-                    <input type="checkbox" id="cw-enabled" data-key="identification.cw_enabled"
-                      {% if ident.get('cw_enabled', True) %}checked{% endif %}>
-                    <span>Enable</span>
-                  </div>
-                </div>
-
-                <div class="field">
-                  <label for="cw-speed">CW Speed (WPM)</label>
-                  <input type="number" id="cw-speed" data-key="identification.cw_wpm" min="5" max="30"
-                         value="{{ ident.get('cw_wpm', 20) }}">
-                </div>
-
-                <div class="field">
-                  <label for="cw-pitch">CW Pitch (Hz)</label>
-                  <input type="number" id="cw-pitch" data-key="identification.cw_pitch" min="300" max="1200"
-                         value="{{ ident.get('cw_pitch', 523) }}">
-                </div>
-
-                <div class="field">
-                  <label for="cw-vol">CW Volume (0–100)</label>
-                  <input type="range" id="cw-vol" data-key="identification.cw_volume" min="0" max="100" step="1"
-                         value="{{ ident.get('cw_volume', 80) }}">
-                  <div class="metaLine">Current: <span id="cw-vol-value">{{ ident.get('cw_volume', 80) }}</span></div>
-                </div>
+                <label for="courtesy-vol" style="margin-top:10px;">Courtesy Volume (0–100)</label>
+                <input type="range" id="courtesy-vol" data-key="repeater.courtesy_tone_volume" min="0" max="100" step="1"
+                       value="{{ repeater.get('courtesy_tone_volume', 80) }}" />
+                <div class="metaLine">Current: <span id="courtesy-vol-value">{{ repeater.get('courtesy_tone_volume', 80) }}</span></div>
               </div>
             </div>
 
-            <!-- TOT TAB -->
-            <div class="tabpanel" data-tab="tot">
-              <div class="secTitle">Timeout Timer</div>
+            <div style="height: 12px;"></div>
 
-              <div class="row">
-                <div class="field">
-                  <label>TOT Enabled</label>
-                  <div class="toggle">
-                    <input type="checkbox" id="tot-enabled" data-key="tot.tot_enabled"
-                      {% if tot.get('tot_enabled', True) %}checked{% endif %}>
-                    <span>Enable</span>
-                  </div>
+            <!-- IDENTIFICATION -->
+            <div class="secTitle">Identification</div>
+
+            <div class="row">
+              <div class="field">
+                <label for="callsign">Callsign</label>
+                <input type="text" id="callsign" data-key="identification.callsign"
+                       value="{{ ident.get('callsign', '') }}" style="text-transform:uppercase;">
+              </div>
+
+              <div class="field">
+                <label for="id-interval">ID Interval (min)</label>
+                <input type="number" id="id-interval" data-key="identification.interval_minutes" min="1" max="60"
+                       value="{{ ident.get('interval_minutes', 10) }}">
+              </div>
+
+              <div class="field">
+                <label>CW ID</label>
+                <div class="toggle">
+                  <input type="checkbox" id="cw-enabled" data-key="identification.cw_enabled"
+                    {% if ident.get('cw_enabled', True) %}checked{% endif %}>
+                  <span>Enable</span>
                 </div>
+              </div>
 
-                <div class="field">
-                  <label for="tot-time">TOT Time (s)</label>
-                  <input type="number" id="tot-time" data-key="tot.tot_time" min="10" step="1"
-                         value="{{ tot.get('tot_time', 180) }}">
-                </div>
+              <div class="field">
+                <label for="cw-speed">CW Speed (WPM)</label>
+                <input type="number" id="cw-speed" data-key="identification.cw_wpm" min="5" max="30"
+                       value="{{ ident.get('cw_wpm', 20) }}">
+              </div>
 
-                <div class="field">
-                  <label for="tot-vol">TOT Volume (0–100)</label>
-                  <input type="range" id="tot-vol" data-key="tot.tot_volume" min="0" max="100" step="1"
-                         value="{{ tot.get('tot_volume', 80) }}">
-                  <div class="metaLine">Current: <span id="tot-vol-value">{{ tot.get('tot_volume', 80) }}</span></div>
-                </div>
+              <div class="field">
+                <label for="cw-pitch">CW Pitch (Hz)</label>
+                <input type="number" id="cw-pitch" data-key="identification.cw_pitch" min="300" max="2000"
+                       value="{{ ident.get('cw_pitch', 523) }}">
+              </div>
 
-                <div class="field">
-                  <label for="tot-freq">TOT Tone Freq (Hz)</label>
-                  <input type="number" id="tot-freq" data-key="tot.tot_tone_freq" min="300" max="2000" step="10"
-                         value="{{ tot.get('tot_tone_freq', 1200) }}">
-                </div>
-
-                <div class="field">
-                  <label>TOT Lockout</label>
-                  <div class="toggle">
-                    <input type="checkbox" id="tot-lockout" data-key="tot.tot_lockout_enabled"
-                      {% if tot.get('tot_lockout_enabled', True) %}checked{% endif %}>
-                    <span>Enable</span>
-                  </div>
-
-                  <label for="lockout-time" style="margin-top:10px;">Lockout Time (s)</label>
-                  <input type="number" id="lockout-time" data-key="tot.tot_lockout_time" min="1" step="1"
-                         value="{{ tot.get('tot_lockout_time', 5) }}">
-                </div>
+              <div class="field">
+                <label for="cw-vol">CW Volume (0–100)</label>
+                <input type="range" id="cw-vol" data-key="identification.cw_volume" min="0" max="100" step="1"
+                       value="{{ ident.get('cw_volume', 50) }}">
+                <div class="metaLine">Current: <span id="cw-vol-value">{{ ident.get('cw_volume', 50) }}</span></div>
               </div>
             </div>
 
-            <!-- PTT TAB -->
-            <div class="tabpanel" data-tab="ptt">
-              <div class="secTitle">PTT</div>
+            <div style="height: 12px;"></div>
 
-              <div class="row">
-                <div class="field">
-                  <label for="ptt-mode">PTT Mode</label>
-                  <select id="ptt-mode" data-key="ptt.primary.mode">
-                    {% set mode = (ptt.get('primary', {}).get('mode', 'VOX')|string)|upper %}
-                    <option value="VOX" {% if mode == "VOX" %}selected{% endif %}>VOX</option>
-                    <option value="CM108" {% if mode == "CM108" %}selected{% endif %}>CM108</option>
-                  </select>
-                </div>
+            <!-- TOT -->
+            <div class="secTitle">Timeout Timer</div>
 
-                <div class="field">
-                  <label for="ptt-device">CM108 Device Path</label>
-                  <input type="text" id="ptt-device" data-key="ptt.primary.device_path"
-                         value="{{ ptt.get('primary', {}).get('device_path', '/dev/hidraw0') }}">
+            <div class="row">
+              <div class="field">
+                <label>TOT</label>
+                <div class="toggle">
+                  <input type="checkbox" id="tot-enabled" data-key="tot.tot_enabled"
+                    {% if tot.get('tot_enabled', True) %}checked{% endif %}>
+                  <span>Enable</span>
                 </div>
+              </div>
 
-                <div class="field">
-                  <label for="ptt-pin">CM108 GPIO Pin (1–8)</label>
-                  <input type="number" id="ptt-pin" data-key="ptt.primary.gpio_pin" min="1" max="8"
-                         value="{{ ptt.get('primary', {}).get('gpio_pin', '3') }}">
+              <div class="field">
+                <label for="tot-time">Duration (s)</label>
+                <input type="number" id="tot-time" data-key="tot.tot_time" min="1" max="600" step="0.1"
+                       value="{{ tot.get('tot_time', 180.0) }}">
+              </div>
+
+              <div class="field">
+                <label for="tot-tone">TOT Tone Pitch (Hz)</label>
+                <input type="number" id="tot-tone" data-key="tot.tot_tone_freq" min="300" max="2500" step="1"
+                       value="{{ tot.get('tot_tone_freq', 1200) }}">
+              </div>
+
+              <div class="field">
+                <label for="tot-vol">TOT Volume (0–100)</label>
+                <input type="range" id="tot-vol" data-key="tot.tot_volume" min="0" max="100" step="1"
+                       value="{{ tot.get('tot_volume', 100) }}">
+                <div class="metaLine">Current: <span id="tot-vol-value">{{ tot.get('tot_volume', 100) }}</span></div>
+              </div>
+
+              <div class="field">
+                <label>Lockout</label>
+                <div class="toggle">
+                  <input type="checkbox" id="tot-lockout" data-key="tot.tot_lockout_enabled"
+                    {% if tot.get('tot_lockout_enabled', True) %}checked{% endif %}>
+                  <span>Enable</span>
                 </div>
+              </div>
+
+              <div class="field">
+                <label for="lockout-time">Lockout (s)</label>
+                <input type="number" id="lockout-time" data-key="tot.tot_lockout_time" min="0" max="600" step="0.1"
+                       value="{{ tot.get('tot_lockout_time', 15.0) }}">
+              </div>
+            </div>
+
+            <div style="height: 12px;"></div>
+
+            <!-- PTT -->
+            <div class="secTitle">PTT</div>
+
+            <div class="row">
+              <div class="field">
+                <label for="ptt-mode">PTT Mode</label>
+                <select id="ptt-mode" data-key="ptt.mode">
+                  <option value="VOX"  {% if ptt_mode == 'VOX' %}selected{% endif %}>VOX</option>
+                  <option value="CM108" {% if ptt_mode == 'CM108' %}selected{% endif %}>CM108</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="ptt-device">Device Path</label>
+                <input type="text" id="ptt-device" data-key="ptt.device_path" value="{{ ptt.get('device_path', '') }}" />
+              </div>
+
+              <div class="field">
+                <label for="ptt-pin">GPIO Pin</label>
+                <input type="number" id="ptt-pin" data-key="ptt.gpio_pin" min="1" max="40"
+                       value="{{ ptt.get('gpio_pin', 3) }}" />
               </div>
             </div>
 
@@ -887,23 +748,6 @@
   </div>
 
   <script>
-    // ====== Config Tabs ======
-    const tabBtns = Array.from(document.querySelectorAll("#config-tabs .tabbtn"));
-    const tabPanels = Array.from(document.querySelectorAll("#config-card .tabpanel"));
-
-    function activateTab(name){
-      tabBtns.forEach(b => b.classList.toggle("active", b.dataset.tab === name));
-      tabPanels.forEach(p => p.classList.toggle("active", p.dataset.tab === name));
-      try { localStorage.setItem("krakenrelay.activeTab", name); } catch (_) {}
-    }
-
-    // Restore last tab (default to Audio)
-    let initialTab = "audio";
-    try { initialTab = localStorage.getItem("krakenrelay.activeTab") || "audio"; } catch (_) {}
-    activateTab(initialTab);
-
-    tabBtns.forEach(b => b.addEventListener("click", () => activateTab(b.dataset.tab)));
-
     // ====== UI Readouts (sliders) ======
     const squelchSlider = document.getElementById('squelch');
     const squelchValue = document.getElementById('squelch-value');
@@ -926,14 +770,6 @@
     limiterThr.addEventListener('input', () => {
       limiterVal.textContent = Number(limiterThr.value).toFixed(3);
     });
-
-    const compSlider = document.getElementById("compressor-strength");
-    const compValue = document.getElementById("compressor-value");
-    if (compSlider && compValue) {
-      compSlider.addEventListener("input", () => {
-        compValue.textContent = compSlider.value + "%";
-      });
-    }
 
     const courtesyVol = document.getElementById('courtesy-vol');
     const courtesyVolValue = document.getElementById('courtesy-vol-value');
@@ -960,7 +796,7 @@
     }
     function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
 
-    // ====== Start/Stop (with confirmation on STOP) ======
+    // ====== Start/Stop ======
     document.getElementById('start-btn').addEventListener('click', () => {
       const formData = new FormData(document.getElementById('config-form'));
       fetch('/start', { method: 'POST', body: formData })
@@ -977,12 +813,6 @@
     });
 
     document.getElementById('stop-btn').addEventListener('click', () => {
-      const ok = window.confirm(
-        "Are you sure you want to stop the repeater?\n" +
-        "This will unkey PTT and stop all repeater activity."
-      );
-      if (!ok) return;
-
       fetch('/stop', { method: 'POST' })
         .then(res => res.json())
         .then(() => {
@@ -991,6 +821,8 @@
         });
     });
 
+    // These endpoints aren’t in your web_ui.py yet — leaving buttons in place,
+    // but we won’t crash the UI if they 404.
     document.getElementById('id-btn').addEventListener('click', () => {
       fetch('/manual_id', { method: 'POST' }).catch(()=>{});
     });
@@ -1007,26 +839,21 @@
         .then(status => {
           uiRunning = !!status.running;
 
-          // keep Start/Stop buttons in sync with actual backend state (covers auto-start)
-          document.getElementById('start-btn').disabled = !!status.running;
-          document.getElementById('stop-btn').disabled = !status.running;
-
-          // show auto-start/config errors even when stopped
-          const autoErr = document.getElementById('auto-start-error');
-          if (autoErr) {
-            if (status.auto_start_error) {
-              autoErr.style.display = 'block';
-              autoErr.textContent = status.auto_start_error;
-            } else {
-              autoErr.style.display = 'none';
-              autoErr.textContent = '';
-            }
-          }
-
           const txDot = document.getElementById('tx-dot');
           const rxDot = document.getElementById('rx-dot');
           const runPill = document.getElementById('run-pill');
           const pttPill = document.getElementById('ptt-pill');
+          const autoErr = document.getElementById('auto-start-error');
+          if (status.auto_start_error) {
+            autoErr.style.display = "block";
+            autoErr.textContent = status.auto_start_error;
+          } else {
+            autoErr.style.display = "none";
+          }
+
+          if (status.auto_start && status.running) {
+            runPill.textContent = "Running (Auto)";
+          }
 
           if (!status.running) {
             setDot(txDot, false);
@@ -1085,7 +912,7 @@
           }
         })
         .catch(()=>{ uiRunning = false; });
-    }, 1000);
+    }, 500);
 
     // ====== Smooth meters (fast) ======
     let targetRxDb = -60, shownRxDb = -60;
@@ -1128,14 +955,14 @@
           if (m.limiting) limit.classList.remove('hidden'); else limit.classList.add('hidden');
         })
         .catch(()=>{});
-    }, 200);
+    }, 50);
 
-    // ====== Conservative Config Lock + Live Updates + Save (with confirmation) ======
+    // ====== Conservative Config Lock + Live Updates + Save ======
     const lockEl = document.getElementById("cfg-lock");
     const lockState = document.getElementById("lock-state");
-    const applyBtn = document.getElementById("apply-btn");
+    const saveBtn = document.getElementById("save-btn");
     const saveStatus = document.getElementById("save-status");
-    const pendingBadge = document.getElementById("pending-badge");
+    const restartBadge = document.getElementById("restart-badge");
 
     // things we need for conditional disables
     const dualOutputEl = document.getElementById("dual-output");
@@ -1151,39 +978,17 @@
 
     // helper: POST JSON
     async function postJSON(url, body){
-      const r = await fetch(url, {
+      return fetch(url, {
         method: "POST",
         headers: {"Content-Type":"application/json"},
         body: JSON.stringify(body)
-      });
-
+      }).then(r => r.json());
       let payload = {};
       try { payload = await r.json(); } catch (_) {}
-
       if (!r.ok){
         const msg = payload?.message || payload?.error || payload?.status || r.statusText || "request failed";
         throw new Error(`${r.status} ${msg}`);
       }
-      return payload;
-    }
-
-    // helper: POST JSON (lenient for legacy 409 on /config/live)
-    async function postJSONAllow409(url, body){
-      const r = await fetch(url, {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify(body)
-      });
-
-      let payload = {};
-      try { payload = await r.json(); } catch (_) {}
-
-      // Legacy backend may return HTTP 409 while still updating in-memory config.
-      if (!r.ok && r.status !== 409){
-        const msg = payload?.message || payload?.error || payload?.status || r.statusText || "request failed";
-        throw new Error(`${r.status} ${msg}`);
-      }
-      payload._http_status = r.status;
       return payload;
     }
 
@@ -1243,31 +1048,50 @@
       lockState.textContent = locked ? "LOCKED" : "UNLOCKED";
       lockState.style.color = locked ? "#ffcc33" : "#3dff47";
 
-      const configCard = document.getElementById("config-card");
+      const form = document.getElementById('config-form');
+      const configCard = form.querySelector('.grid .card:nth-child(2)');
 
       if (configCard){
         configCard.querySelectorAll('input, select, textarea, button').forEach(el => {
-          // never disable the lock checkbox itself
+          // ✅ IMPORTANT: never disable the lock checkbox itself
           if (el === lockEl) return;
 
-          // allow Save always
-          if (el.id === "apply-btn") return;
+          // allow Save always (optional)
+          if (el.id === "save-btn") return;
 
-          // allow tab buttons always (you can view config even when locked)
-          if (el.classList && el.classList.contains("tabbtn")) return;
-
+          // disable everything else in config card when locked
           el.disabled = locked;
         });
       }
 
+      // Optional: lock device selects too
+      const inputDev = document.getElementById('input-device');
+      const outputDev = document.getElementById('output-device');
+      if (inputDev) inputDev.disabled = locked;
+      if (outputDev) outputDev.disabled = locked;
+
+      // after base enable/disable, re-apply dependent logic
       syncConditionalDisables();
     }
 
-    // default lock UI
+    // ===== initial state =====
+    lockEl.checked = true;       // conservative default
     setLockedUI(true);
 
-    // one change handler (with confirm on unlock)
-    lockEl.addEventListener('change', async () => {
+    fetch("/lock", { cache: "no-store" })
+      .then(r => r.json())
+      .then(d => {
+        lockEl.checked = !!d.locked;
+        setLockedUI(lockEl.checked);
+      })
+      .catch(() => {
+        // fallback: keep conservative default
+        lockEl.checked = true;
+        setLockedUI(true);
+      });
+
+    // ===== one change handler (with confirm on unlock) =====
+    lockEl.addEventListener('change', () => {
       if (!lockEl.checked) {
         const ok = window.confirm(
           "You are about to unlock configuration controls\n\n" +
@@ -1282,170 +1106,78 @@
         }
 
         setLockedUI(false);
-        try {
-          await postJSON("/lock", { locked: false });
-        } catch (err) {
-          console.error("Failed to unlock backend config:", err);
-          setSavePill("Backend lock failed", "bad");
-          lockEl.checked = true;
-          setLockedUI(true);
-        }
+        postJSON("/lock", { locked: false })
+          .catch(err => {
+           console.error("Failed to unlock backend config:", err);
+            setSavePill("Backend lock failed", "bad");
+            lockEl.checked = true;
+            setLockedUI(true);
+          });
         return;
       }
 
       setLockedUI(true);
-      try {
-        await postJSON("/lock", { locked: true });
-      } catch (err) {
+      postJSON("/lock", { locked: true })
+        .catch(err => {
         console.error("Failed to lock backend config:", err);
         setSavePill("Backend lock failed", "bad");
-      }
+      });      
     });
 
-    // Live update: send changes as they happen
-    // Any successful change => show "Pending changes" (until Apply Changes is clicked).
-    const liveInputs = document.querySelectorAll("[data-key]");
-    liveInputs.forEach(el => {
-      el.addEventListener("change", async () => {
+    // ===== debounced live updates =====
+    const debounceTimers = new Map();
+
+    function sendLiveUpdate(el){
+      if (lockEl.checked) return;
+      const key = el.dataset.key;
+      if (!key) return;
+
+      const value = (el.type === "checkbox") ? el.checked : el.value;
+
+      postJSON("/config/live", {key, value})
+        .then(resp => {
+          if (resp && resp.status === "restart_required"){
+            restartBadge.style.display = "inline-flex";
+            el.classList.add("needs-restart");
+          }
+        })
+        .catch(()=>{});
+    }
+
+    function scheduleUpdate(el){
+      const key = el.dataset.key || el.id;
+      if (debounceTimers.has(key)) clearTimeout(debounceTimers.get(key));
+      debounceTimers.set(key, setTimeout(() => sendLiveUpdate(el), 120));
+    }
+
+    document.querySelectorAll("[data-key]").forEach(el => {
+      const handler = () => {
         if (lockEl.checked) return;
-
-        const key = el.getAttribute("data-key");
-        let val;
-
-        if (el.type === "checkbox") val = !!el.checked;
-        else val = el.value;
-
-        try {
-          await postJSONAllow409("/config/live", { key, value: val });
-          pendingBadge.style.display = "inline-flex";
-        } catch (err) {
-          const msg = String(err?.message || err);
-          if (msg.includes("423")) {
-            setSavePill("Locked", "warn");
-          } else {
-            setSavePill("Live update failed", "bad");
-          }
-        }
-
+        scheduleUpdate(el);
         syncConditionalDisables();
-      });
-    });
+      };
 
-    // Apply Changes: save config to disk (confirm)
-    applyBtn.addEventListener("click", async () => {
-      const ok = window.confirm(
-        "Apply configuration changes?\n\n" +
-        "This saves the current settings to config.yaml.\n" +
-        "Some changes may require stopping/starting the repeater to take effect."
-      );
-      if (!ok) return;
-
-      try {
-        // Prefer the newer /config/apply route if present, but stay compatible with /config/save.
-        try {
-          await postJSON("/config/apply", {});
-        } catch (e) {
-          const msg = String(e?.message || e);
-          if (msg.includes("404")) {
-            await postJSON("/config/save", {});
-          } else {
-            throw e;
-          }
-        }
-
-        setSavePill("Applied", "ok");
-        pendingBadge.style.display = "none";
-      } catch (err) {
-        console.error(err);
-        setSavePill("Apply failed", "bad");
+      if (el.tagName === "SELECT" || el.type === "checkbox") {
+        el.addEventListener("change", handler);
+      } else {
+        el.addEventListener("input", handler);
       }
     });
 
-    // Keep conditional fields synced at boot
+    // Save button
+    saveBtn.addEventListener("click", () => {
+      fetch("/config/save", {method:"POST"})
+        .then(r => r.json())
+        .then(d => {
+          if (d && d.status === "ok") setSavePill("Saved ✅", "ok");
+          else setSavePill("Save failed ❌", "bad");
+        })
+        .catch(()=> setSavePill("Save failed ❌", "bad"));
+    });
+
+    // ensure dependent disables are correct on load
     syncConditionalDisables();
-
-    // ====== Logs panel ======
-    const logsDetails = document.getElementById("logs-details");
-    const logsBox = document.getElementById("logs-box");
-    const logsClearBtn = document.getElementById("logs-clear-btn");
-    const logsPauseBtn = document.getElementById("logs-pause-btn");
-    const logsPausedBadge = document.getElementById("logs-paused-badge");
-
-    let logsAfter = 0;
-    let logsPaused = false;
-    let logsSeenAny = false;
-    const logLines = [];
-
-    function setLogsPaused(p){
-      logsPaused = !!p;
-      logsPauseBtn.textContent = logsPaused ? "Resume" : "Pause";
-      logsPausedBadge.style.display = logsPaused ? "inline-flex" : "none";
-    }
-    setLogsPaused(false);
-
-    function renderLogs(){
-      logsBox.textContent = logLines.length ? logLines.join("\n") : "No events yet.";
-      logsBox.scrollTop = logsBox.scrollHeight;
-    }
-
-    async function fetchLogs(){
-      if (!logsDetails.open) return;
-      if (logsPaused) return;
-
-      try{
-        const r = await fetch(`/logs?after=${logsAfter}&limit=200`, { cache: "no-store" });
-        if (!r.ok) throw new Error("logs endpoint unavailable");
-        const data = await r.json();
-
-        const entries = Array.isArray(data.entries) ? data.entries : [];
-        if (!entries.length){
-          if (!logsSeenAny) renderLogs();
-          return;
-        }
-
-        logsSeenAny = true;
-
-        for (const e of entries){
-          if (typeof e.id === "number") logsAfter = Math.max(logsAfter, e.id);
-          if (typeof e.message === "string") logLines.push(e.message);
-          if (logLines.length > 200) logLines.splice(0, logLines.length - 200);
-        }
-        renderLogs();
-      }catch(e){
-        // Don’t spam; only show once.
-        if (!logsSeenAny){
-          logsBox.textContent = "Logs are not available (backend /logs not implemented yet).";
-          logsSeenAny = true;
-        }
-      }
-    }
-
-    // Only start polling when panel is opened
-    logsDetails.addEventListener("toggle", () => {
-      if (logsDetails.open){
-        // reset to recent window when opened
-        logsAfter = 0;
-        logLines.length = 0;
-        logsSeenAny = false;
-        logsBox.textContent = "Loading…";
-        fetchLogs();
-      }
-    });
-
-    logsClearBtn.addEventListener("click", async () => {
-      logLines.length = 0;
-      logsAfter = 0;
-      logsSeenAny = false;
-      logsBox.textContent = "Cleared.";
-      try { await fetch("/logs/clear", { method: "POST" }); } catch (_) {}
-    });
-
-    logsPauseBtn.addEventListener("click", () => {
-      setLogsPaused(!logsPaused);
-      if (!logsPaused) fetchLogs();
-    });
-
-    setInterval(fetchLogs, 900);
   </script>
+
 </body>
 </html>
