@@ -96,34 +96,29 @@ class ScheduleID:
         self.last_stop_time = time.time()
     
     def check_and_send(self):
-        now = time.time()
         # === Idle & Post-TX CW ID === #
         if self.is_transmitting():
             return
         
-        if now - self.last_stop_time < self.cooldown:
-            return
+        if self.config.config['identification']['cw_enabled']:
+            interval = self.config.config['identification']['interval_minutes'] * 60
+            should_id = time.time() - self.last_id_time > interval
 
-        if not self.config.config['identification']['cw_enabled']:
-            return
-
-        interval = self.config.config['identification']['interval_minutes'] * 60
-        should_id = time.time() - self.last_id_time > interval
-
-        if not should_id:
-            return
-
-        if self.post_tx:
-            logging.info("Sending CW ID after user transmission.")
-            self.post_tx = False
-        elif not self.sending_id:
-            logging.info("Sending CW ID while idle.")
-        else:
-            return
-
-        self.send_id()
-
+            if should_id and (self.post_tx or not self.sending_id):
+                if time.time() - self.last_stop_time > self.cooldown:
+                    if self.post_tx:
+                        logging.info("Sending CW ID after user transmission.")
+                        self.post_tx = False
+                    else:
+                        logging.info("Sending CW ID while idle.")
+                    
+                    self.send_id()
+    
     def send_id(self):
+        if not self.config.config['identification'].get('cw_enabled', False):
+            logging.error("Manual ID requested but CW is disabled.")
+            return
+        
         if self.is_transmitting() or self.sending_id:
             logging.warning("Unable to Send ID: already transmitting")
             return
