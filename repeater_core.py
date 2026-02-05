@@ -2,7 +2,6 @@ import numpy as np
 import time
 import threading
 import logging
-import queue
 from morse_code import ScheduleID, MorseCode
 from ptt_controller import PTTManager
 from tone_control import ToneGenerator, TonePlayer
@@ -123,6 +122,9 @@ class RepeaterController:
         self.last_audio_time = time.time()
         self.last_transmission = time.time()
         self.current_rms = 0
+        self._carrier_valid = False
+        self._carrier_probe_start = None
+        self._carrier_last_level_db = None
         self.squelch_open = False
         self.squelch_open_time = 0.0
         self._last_above_squelch = 0.0
@@ -134,16 +136,6 @@ class RepeaterController:
         self.kerchunk_buffer = [] 
         self.tx_backlog = deque()
         self.tx_backlog_max = 50
-        self.audio_input_queue = queue.Queue(maxsize=15)
-        self.input_thread = None
-        self._stop_event = threading.Event()
-        self.audio_output_queue = queue.Queue(maxsize=25)
-        self.output_thread = None
-        self._output_stop_event = threading.Event()
-        self._unkey_after_drain = False
-        self.out2_queue = None
-        self.out2_thread = None
-        self.out2_stop = threading.Event()
 
         # Silence Buffer
         self._silence_chunk = np.zeros(self.config.config['audio']['chunk_size'], dtype=np.int16)
@@ -234,7 +226,6 @@ class RepeaterController:
                             rate=audio_config['sample_rate'],
                             chunk=audio_config['chunk_size']
                         )
-                        self._start_out2_worker()
                         logging.info(f"Dual output enabled on device index {second_index}")
                         
                     except Exception as e:
@@ -262,7 +253,7 @@ class RepeaterController:
         except Exception as e:
             logging.error(f"Failed to setup audio streams: {e}")
             raise
-   
+
     def request_manual_id(self) -> None:
         """
         Non-blocking: just requests an ID; audio thread will execute it.
@@ -286,8 +277,8 @@ class RepeaterController:
     def _update_squelch_state(self, level_db: float, now: float) -> bool:
         """
         Debounced squelch:
-          - Open when level_db > open_thr
-          - Once open, stay open until level_db < close_thr for >= hang_time
+        - Open when level_db > open_thr
+        - Once open, stay open until level_db < close_thr for >= hang_time
         """
         audio_cfg = self.config.config.get("audio", {})
 
@@ -318,147 +309,6 @@ class RepeaterController:
 
         return self.squelch_open
 
-    def input_producer(self):
-        while self.running and not self._stop_event.is_set():
-            try:
-                data = self.input_stream.read(
-                    self.config.config['audio']['chunk_size'],
-                    exception_on_overflow=False
-                )
-                try:
-                    self.audio_input_queue.put_nowait(data)
-                except queue.Full:
-                    try:
-                        self.audio_input_queue.get_nowait()
-                    except queue.Empty:
-                        pass
-                    try:
-                        self.audio_input_queue.put_nowait(data)
-                    except queue.Full:
-                        pass    
-            except Exception as e:
-                if (not self.running) or self._stop_event.is_set():
-                    logging.info(f"[Input] exiting during shutdown: {e}")
-                else:
-                    logging.error(f"Error in input_producer: {e}")
-                break
-
-    def _drain_input_queue(self, max_frames: int = 4):
-        if not hasattr(self, "audio_input_queue") or self.audio_input_queue is None:
-            return
-        for _ in range(max_frames):
-            try:
-                self.audio_input_queue.get_nowait()
-            except Exception:
-                break
-
-    def output_consumer(self):
-        while not self._output_stop_event.is_set():
-            try:
-                chunk = self.audio_output_queue.get(timeout=0.02)  # shorter than 0.1 helps
-            except queue.Empty:
-                # If we requested unkey and there's nothing left to play, unkey now.
-                if self._unkey_after_drain and self.audio_output_queue.empty():
-                    self._unkey_after_drain = False
-                    self.transmitting = False
-                    self.skip_courtesy_tone = False
-                    self.ptt_manager.safe_ptt_unkey()
-                    logging.info("Transmitter unkeyed (after drain).")
-                    continue
-
-                # If we're keyed, keep the audio device fed to avoid underruns.
-                if getattr(self, "transmitting", False):
-                    try:
-                        self.output_stream.write(self._silence_bytes)
-                    except Exception as e:
-                        logging.warning(f"[Output] Primary silence write failed: {e}")
-                    self._send_to_secondary(self._silence_bytes)
-                continue
-
-            try:
-                self.output_stream.write(chunk)
-            except Exception as e:
-                logging.warning(f"[Output] Primary output write failed: {e}")
-
-            self._send_to_secondary(chunk)
-
-            # If we requested unkey, do it only after all queued audio has played
-            if self._unkey_after_drain and self.audio_output_queue.empty():
-                self._unkey_after_drain = False
-                self.transmitting = False
-                self.skip_courtesy_tone = False
-                self.ptt_manager.safe_ptt_unkey()
-                logging.info("Transmitter unkeyed (after drain).")
-
-    def _start_out2_worker(self):
-        if not self.output_stream_2:
-            return
-        if self.out2_thread and self.out2_thread.is_alive():
-            return
-        self.out2_queue = queue.Queue(maxsize=8)
-        self.out2_stop.clear()
-        self.out2_thread = threading.Thread(
-            target=self._out2_worker,
-            name="RepeaterOut2Worker",
-            daemon=True
-        )
-        self.out2_thread.start()
-
-    def _stop_out2_worker(self):
-        self.out2_stop.set()
-
-        try:
-            if self.output_stream_2 and hasattr(self.output_stream_2, "abort_stream"):
-                self.output_stream_2.abort_stream()
-        except Exception:
-            pass
-
-        if self.out2_queue:
-            try:
-                self.out2_queue.put_nowait(None)
-            except Exception:
-                pass
-
-        if self.out2_thread and self.out2_thread.is_alive():
-            self.out2_thread.join(timeout=1.0)
-
-        self.out2_thread = None
-        self.out2_queue = None
-
-    def _out2_worker(self):
-        while not self.out2_stop.is_set():
-            try:
-                item = self.out2_queue.get(timeout=0.2) if self.out2_queue else None
-            except queue.Empty:
-                continue
-            if item is None:
-                break
-            if not self.output_stream_2:
-                continue
-            try:
-                self.output_stream_2.write(item)
-            except Exception as e:
-                logging.warning(f"[Dual Output] Secondary output failed, disabling: {e}")
-                try:
-                    self.output_stream_2.stop_stream()
-                    self.output_stream_2.close()
-                except Exception:
-                    pass
-                self.output_stream_2 = None
-                break
-
-    def _send_to_secondary(self, data: bytes):
-        if not self.output_stream_2 or not self.out2_queue:
-            return
-        try:
-            self.out2_queue.put_nowait(data)
-        except queue.Full:
-            try:
-                _ = self.out2_queue.get_nowait()
-                self.out2_queue.put_nowait(data)
-            except Exception:
-                pass
-
     #----------------#
     # System Control #
     #----------------#
@@ -468,12 +318,6 @@ class RepeaterController:
             return
 
         self.running = True
-        self._stop_event.clear()
-        self._output_stop_event.clear()
-        self.input_thread = threading.Thread(target=self.input_producer, daemon=True)
-        self.output_thread = threading.Thread(target=self.output_consumer, daemon=True)
-        self.input_thread.start()
-        self.output_thread.start()
         self.audio_thread = threading.Thread(target=self.audio_loop)
         self.audio_thread.start()
         logging.info("Repeater controller started")
@@ -497,15 +341,6 @@ class RepeaterController:
         logging.info("[Repeater] Audio thread started.")
 
         while self.running:
-
-            input_alive = self.input_thread and self.input_thread.is_alive()
-            now = time.time()
-            if not input_alive and (now - self.last_audio_time > 1.0):
-                logging.critical("[Repeater] Input thread died shutting down controller")
-                self.running = False
-                self._error = "Input device failed"
-                self.cleanup()
-                break
 
             self.tot_manager.check_lockout_expired()
             if self._cw_gen is not None:
@@ -586,62 +421,30 @@ class RepeaterController:
         logging.info("[Repeater] Audio thread exited.")
 
     def cleanup(self) -> bool:
-        logging.info("Cleaning up repeater controller...")
-
+        logging.info("========== [Repeater] Cleanup Starting ==========")
+        logging.info(
+            "Controller state before cleanup: running=%s transmitting=%s skip_courtesy_tone=%s shutdown_failed=%s",
+            self.running, self.transmitting, self.skip_courtesy_tone, self._shutdown_failed
+        )
         ok = True
         self._shutdown_failed = False
 
         # --- A) SAFETY FIRST: UNKEY ---
-        # Do NOT rely on _unkey_after_drain in cleanup.
+        logging.info("[Cleanup Step A] Unkeying transmitter and suppressing courtesy tone...")
         try:
-            self._unkey_after_drain = False
             self.transmitting = False
             self.skip_courtesy_tone = True
             self.ptt_manager.safe_ptt_unkey()
-            logging.info("[Repeater] PTT unkeyed (forced cleanup).")
+            logging.info("[Cleanup Step A] PTT unkeyed (forced cleanup).")
         except Exception:
-            logging.exception("[Repeater] Failed to unkey PTT during cleanup.")
+            logging.exception("[Cleanup Step A] Failed to unkey PTT during cleanup.")
             ok = False
-        
+
         # --- B) SIGNAL ALL LOOPS/THREADS TO STOP ---
         self.running = False # Stop the loop
-        try:
-            self._stop_event.set()
-        except Exception:
-            pass
-        try:
-            self._output_stop_event.set()
-        except Exception:
-            pass
-        try:
-            self.out2_stop.set()
-        except Exception:
-            pass
+        logging.info("[Cleanup Step B] Stopping audio loop: running=%s", self.running)
 
-        # --- C) ABORT STREAM to break blocking read()/write() ---
-        for name in ("input_stream", "output_stream", "output_stream_2"):
-            s = getattr(self, name, None)
-            if not s:
-                continue
-            try:
-                try:
-                    s.stop_stream()
-                except Exception:
-                    pass
-                s.close()
-            except Exception as e:
-                if logging.getLogger().isEnabledFor(logging.DEBUG):
-                    logging.debug("[Repeater] %s close during shutdown: %s", name, e)
-            setattr(self, name, None)
-
-
-        # --- D) STOP OUT2 WORKER (it may be stuck in write; abort above helps) ---
-        try:
-            self._stop_out2_worker()
-        except Exception:
-            logging.exception("[Repeater] _stop_out2_worker failed (continuing).")
-            ok = False
-        # --- E) JOIN THREADS (streams are closed, so read/write should unblock) ---
+        # --- C) JOIN THREADS ---
         def _join(th, name: str, timeout: float) -> bool:
             if not th:
                 return True
@@ -650,15 +453,14 @@ class RepeaterController:
             if th is threading.current_thread():
                 logging.warning("[Repeater] cleanup called from %s; skipping self-join", name)
                 return True
+            logging.info("[Cleanup Step C] Joining thread: %s", name)
             th.join(timeout=timeout)
             if th.is_alive():
                 logging.error("[Repeater] %s still alive after %.1fs", name, timeout)
                 return False
+            logging.info("[Cleanup Step C] Joined thread: %s", name)
             return True
 
-        ok &= _join(getattr(self, "input_thread", None), "input_thread", 2.0)
-        ok &= _join(getattr(self, "output_thread", None), "output_thread", 2.0)
-        ok &= _join(getattr(self, "out2_thread", None), "RepeaterOut2Worker", 2.0)
         ok &= _join(getattr(self, "audio_thread", None), "audio_thread", 3.0)
 
         if not ok:
@@ -666,20 +468,45 @@ class RepeaterController:
             self._shutdown_failed = True
             return False
     
+        # --- D) CLOSE STREAMS (threads are gone) ---
+        if ok:
+            for name in ("input_stream", "output_stream", "output_stream_2"):
+                s = getattr(self, name, None)
+                if not s:
+                    continue
+                try:
+                    logging.info(f"[Cleanup Step D] Closing stream: {name}")
+                    try:
+                        s.stop_stream()
+                    except Exception:
+                        pass
+                    s.close()
+                    logging.info(f"[Cleanup Step D] Closed stream: {name}")
+                except Exception as e:
+                    logging.warning(f"[Cleanup Step D] Exception closing {name}: {e}")
+                    ok = False
+                setattr(self, name, None)
+
         # --- G) TERMINATE PortAudio LAST ---
-        try:
-            self.audio_manager.cleanup()
-        except Exception:
-            logging.exception("[Repeater] Audio manager cleanup failed.")
-            ok = False
+        #try:
+        #    self.audio_manager.cleanup()
+        #except Exception:
+        #    logging.exception("[Repeater] Audio manager cleanup failed.")
+        #    ok = False
 
         self._shutdown_failed = not ok
+        if ok:
+            logging.info("Cleanup completed successfully. No issues detected.")
+        else:  
+            logging.warning("Cleanup completed with ERRORS. Check previous logs for details.")
 
         logging.info("[Repeater] cleanup() done. ok=%s shutdown_failed=%s", ok, self._shutdown_failed)
         logging.info("🧵 Active threads after cleanup: %d", threading.active_count())
         for t in threading.enumerate():
             logging.info("  • %s (alive=%s)", t.name, t.is_alive())
 
+        logging.info("========== [Repeater] Clean Up Ended ==========")
+        logging.info("73 de K3AYV (American Squid).")
         return ok
 
     #-----------------------#
@@ -687,9 +514,14 @@ class RepeaterController:
     #-----------------------#
     def process_audio(self):
         try:
-            data = self.audio_input_queue.get(timeout=0.1)
-        except queue.Empty:
-            return
+            data = self.input_stream.read(self.chunk_size, exception_on_overflow=False)
+        except Exception as e:
+            # If we're shutting down, just exit quietly
+            if not self.running:
+                return
+            logging.error(f"[Input] Input stream read failed: {e}")
+            raise
+
         samples = np.frombuffer(data, dtype=np.int16).astype(np.float32)
 
         if samples.size == 0:
@@ -702,7 +534,7 @@ class RepeaterController:
         # Check squelch first
         now = time.time()
         level_db = float(calculate_db_level(samples))
-        
+    
         prev_open = self.squelch_open
         squelch_open_now = self._update_squelch_state(level_db, now)
 
@@ -730,6 +562,67 @@ class RepeaterController:
             if logging.getLogger().isEnabledFor(logging.DEBUG):
                 logging.debug("[Anti-Kerchunk] Squelch closed.")
 
+        # --- Carrier Validity Gate --- #
+        if squelch_open_now:
+            audio_cfg = self.config.config.get("audio", {})
+            cv_min_delta = float(audio_cfg.get("carrier_validity_min_delta", 0.1))
+            cv_timeout = float(audio_cfg.get("carrier_validity_timeout", 2.5))
+
+            # Start / reset on a fresh open edge
+            if just_opened or self._carrier_probe_start is None:
+                self._carrier_valid = False
+                self._carrier_probe_start = now  # "no-movement timer" starts now
+                self._carrier_last_level_db = level_db
+
+            # Compute movement since last frame
+            last = self._carrier_last_level_db
+            delta = 0.0 if last is None else abs(level_db - float(last))
+            self._carrier_last_level_db = level_db
+
+            if delta >= cv_min_delta:
+                # We saw "movement" -> mark valid and reset the no-movement timer
+                if not self._carrier_valid:
+                    if logging.getLogger().isEnabledFor(logging.DEBUG):
+                        logging.debug("[CarrierValidity] VALID delta=%.3f >= %.3f", delta, cv_min_delta)
+                self._carrier_valid = True
+                self._carrier_probe_start = now
+            else:
+                # No movement: if it's been too long, declare invalid and drop
+                if (now - float(self._carrier_probe_start or now)) >= cv_timeout:
+                    if logging.getLogger().isEnabledFor(logging.DEBUG):
+                        logging.debug(
+                            "[CarrierValidity] INVALID (delta=%.3f < %.3f for %.2fs)",
+                            delta, cv_min_delta, cv_timeout
+                        )
+
+                    # Force-close and dump buffers
+                    self.squelch_open = False
+                    squelch_open_now = False
+                    self._carrier_valid = False
+                    self._carrier_probe_start = None
+                    self._carrier_last_level_db = None
+                    self.kerchunk_buffer = []
+                    self.tx_start_pending = False
+
+                    # If we were already keyed, drop immediately and do NOT courtesy-beep
+                    if self.transmitting:
+                        self.skip_courtesy_tone = True
+                        self.stop_transmission()
+                    return
+
+                # While still "probing", only buffer pre-TX so we don't key early
+                if not self.transmitting:
+                    self.kerchunk_buffer.append(samples.copy())
+                    if len(self.kerchunk_buffer) > self.tx_backlog_max:
+                        self.kerchunk_buffer.pop(0)
+                    return
+
+        else:
+            # squelch closed: reset probe state
+            self._carrier_valid = False
+            self._carrier_probe_start = None
+            self._carrier_last_level_db = None
+
         if squelch_open_now:
             # Process audio chain
             if (
@@ -750,12 +643,12 @@ class RepeaterController:
         else:
             self.current_rms = 0
             if self.transmitting:
-               if time.time() - self.last_audio_time > self.config.config['repeater']['tail_time']:
-                logging.info("Silence persists beyond tail time. Stopping transmission.")
-                self.stop_transmission()
-               else:
-                   # 🚨 We're in the tail hang time — KEEP AUDIO FLOWING
-                   self._send_pcm(self._silence_chunk)
+                if time.time() - self.last_audio_time > self.config.config['repeater']['tail_time']:
+                    logging.info("Silence persists beyond tail time. Stopping transmission.")
+                    self.stop_transmission()
+                else:
+                    # 🚨 We're in the tail hang time — KEEP AUDIO FLOWING
+                    self._send_pcm(self._silence_chunk)
             else:
                 pass
     def handle_transmission(self, samples):
@@ -817,7 +710,7 @@ class RepeaterController:
                 
                 while len(self.tx_backlog) > self.tx_backlog_max:
                     self.tx_backlog.popleft()
- 
+
         if self.tx_backlog:
             self.tx_backlog.append(samples.copy())
             to_send = self.tx_backlog.popleft()
@@ -855,16 +748,26 @@ class RepeaterController:
             # Clip to int16 range
             pcm = np.clip(np.asarray(pcm), -32768, 32767).astype(np.int16)
             data = pcm.tobytes()
+
+        # Primary output
         try:
-            self.audio_output_queue.put_nowait(data)
-        except queue.Full:
-            if self._cw_gen is not None:
+            if self.output_stream:
+                self.output_stream.write(data)
+        except Exception as e:
+            logging.warning(f"[Output] Primary output write failed: {e}")
+
+        # Secondary output (dual output) – best effort
+        if self.output_stream_2:
+            try:
+                self.output_stream_2.write(data)
+            except Exception as e:
+                logging.warning(f"[Dual Output] Secondary output failed, disabling: {e}")
                 try:
-                    self.audio_output_queue.put(data, timeout=0.2)
-                except:
-                    logging.warning(f"[Output] Output queue full, dropping audio frame.")
-            else:
-                logging.warning("[Output] Output queue full, dropping audio frame.")    
+                    self.output_stream_2.stop_stream()
+                    self.output_stream_2.close()
+                except Exception:
+                    pass
+                self.output_stream_2 = None    
 
     def _update_meter(self, samples: np.ndarray, direction: str):
         db = get_dbfs(samples)
@@ -931,7 +834,7 @@ class RepeaterController:
         for i in range(num_fade_chunks):
             self._send_pcm(self._silence_bytes)
             pass
-          
+        
         self.transmitting = False
         self.transmission_start_time = None
         self.tot_manager.reset()
@@ -942,10 +845,9 @@ class RepeaterController:
 
         if not self.skip_courtesy_tone:
             self.schedule_id.mark_post_tx()
-        self._unkey_after_drain = True
-        #self.skip_courtesy_tone = False
-        #self.ptt_manager.safe_ptt_unkey()
-        #logging.info("Transmitter unkeyed.")
+        self.skip_courtesy_tone = False
+        self.ptt_manager.safe_ptt_unkey()
+        logging.info("Transmitter unkeyed.")
 
     def play_audio_chunks(self, audio):
         chunk_size = self.config.config['audio']['chunk_size']
