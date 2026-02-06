@@ -8,7 +8,6 @@ from tone_control import ToneGenerator, TonePlayer
 from tot_manager import TOTManager
 from audio_utils import get_dbfs, check_clipping, calculate_db_level
 from kraken_dsp.kraken_dsp_wrapper import DSPChain
-from collections import deque
 
 class RepeaterController:
 
@@ -133,9 +132,8 @@ class RepeaterController:
         self._cleanup_lock = threading.Lock()
 
         # Buffer Logic
-        self.kerchunk_buffer = [] 
-        self.tx_backlog = deque()
-        self.tx_backlog_max = 50
+        self.kerchunk_buffer = []
+        self.kerchunk_backlog_max = 50
 
         # Silence Buffer
         self._silence_chunk = np.zeros(self.config.config['audio']['chunk_size'], dtype=np.int16)
@@ -613,7 +611,7 @@ class RepeaterController:
                 # While still "probing", only buffer pre-TX so we don't key early
                 if not self.transmitting:
                     self.kerchunk_buffer.append(samples.copy())
-                    if len(self.kerchunk_buffer) > self.tx_backlog_max:
+                    if len(self.kerchunk_buffer) > self.kerchunk_backlog_max:
                         self.kerchunk_buffer.pop(0)
                     return
 
@@ -669,7 +667,7 @@ class RepeaterController:
             else:
                 # Done: flush buffered chunks
                 for chunk in self.vox_buffer:
-                    self.tx_backlog.append(chunk)
+                    self._send_tx_chunk(chunk)
                 self.vox_buffer = []
                 self.vox_delay_active = False
 
@@ -705,18 +703,10 @@ class RepeaterController:
                 if logging.getLogger().isEnabledFor(logging.DEBUG):
                     logging.debug("[AntiKerchunk] Flushing %d buffered chunks", len(self.kerchunk_buffer))
                 for chunk in self.kerchunk_buffer:
-                    self.tx_backlog.append(chunk)
+                    self._send_tx_chunk(chunk)
                 self.kerchunk_buffer = []
-                
-                while len(self.tx_backlog) > self.tx_backlog_max:
-                    self.tx_backlog.popleft()
 
-        if self.tx_backlog:
-            self.tx_backlog.append(samples.copy())
-            to_send = self.tx_backlog.popleft()
-            self._send_tx_chunk(to_send)
-        else:
-            self._send_tx_chunk(samples)
+        self._send_tx_chunk(samples)
 
         self.last_audio_time = time.time()
 
@@ -855,6 +845,6 @@ class RepeaterController:
             chunk = audio[i:i + chunk_size]
             if len(chunk) < chunk_size:
                 chunk = np.pad(chunk, (0, chunk_size - len(chunk)))
-            self.tx_backlog.append(chunk)
+            self._send_tx_chunk(chunk)
 
 
