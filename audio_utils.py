@@ -18,3 +18,17 @@ def calculate_db_level(samples):
     else:
         db_level = -60  # Set minimum dB level for silence
     return db_level
+
+def calculate_noise_floor(samples: np.ndarray,
+                          previous_floor: float | None,
+                          alpha: float = 0.08) -> float:
+    """
+    Calculate smoothed idle noise floor in dBFS.
+    Uses get_dbfs() as the source of truth.
+    """
+    current_db = get_dbfs(samples)
+
+    if previous_floor is None:
+        return current_db
+
+    return (alpha * current_db) + ((1 - alpha) * previous_floor)

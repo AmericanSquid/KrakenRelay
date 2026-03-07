@@ -3,6 +3,7 @@ import threading, time
 import yaml
 import math
 import logging
+from stats import SystemStats
 from collections import deque
 
 app = Flask(__name__)
@@ -15,6 +16,7 @@ controller = None  # This will hold the RepeaterController when started
 controller_lock = threading.RLock()
 config_locked = True
 _config_lock = threading.Lock()
+system_stats = SystemStats()
 
 def _set_path(d: dict, path: str, value):
     keys = path.split(".")
@@ -69,6 +71,7 @@ class _UILogRingHandler(logging.Handler):
             _ui_log_buf.append({
                 "id": _ui_log_seq,
                 "ts": time.time(),
+                "time": time.strftime("%H:%M:%S"),
                 "level": record.levelname,
                 "message": msg,
             })
@@ -86,8 +89,8 @@ def init_ui_log_capture() -> None:
             return
 
     h = _UILogRingHandler()
-    h.setLevel(logging.DEBUG)
-    h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s", datefmt="%H:%M:%S"))
+    h.setLevel(logging.INFO)
+    h.setFormatter(logging.Formatter("%(message)s"))
     root.addHandler(h)
     _ui_log_ready = True
 
@@ -153,7 +156,7 @@ def config_apply():
         if controller:
             with state_lock:
                 controller.cleanup()
-            audio_manager.cleanup()
+            #audio_manager.cleanup()
 
             input_idx = controller.input_device
             output_idx = controller.output_device
@@ -227,6 +230,19 @@ def start_repeater():
 
         return jsonify({"status": "running"})
 
+#@app.route('/stop', methods=['POST'])
+#def stop_repeater():
+#    global controller
+#    if not controller:
+#        return jsonify({"status": "not_running"})
+#    # Signal the controller to stop
+#    with state_lock:
+#        controller.cleanup()
+#    # Also close audio streams and reset controller
+#    #audio_manager.cleanup()
+#    controller = None
+#    return jsonify({"status": "stopped"})
+
 @app.route('/stop', methods=['POST'])
 def stop_repeater():
     global controller
@@ -234,7 +250,19 @@ def stop_repeater():
         return jsonify({"status": "not_running"})
     # Signal the controller to stop
     with state_lock:
-        controller.cleanup()
+        try:
+            ok = controller.cleanup()
+        except Exception as e:
+            logging.exception("[WebUI] Controller cleanup failed.")
+            ok = False
+        controller = None
+
+    if not ok:
+        return jsonify({
+            "status": "error",
+            "message": "Cleanup incomplete. Service restart may be required."
+        })
+    return jsonify({"status": "stopped"})
     # Also close audio streams and reset controller
     audio_manager.cleanup()
     controller = None
@@ -325,6 +353,10 @@ def get_status():
         if logging.getLogger().isEnabledFor(logging.DEBUG):
             logging.debug("[WebUI] /status failed: %s", e)
         return jsonify({"running": False, "auto_start_error": auto_start_error})
+
+@app.route("/api/stats")
+def api_stats():
+    return jsonify(system_stats.get())
 
 @app.route("/meter")
 def meter():

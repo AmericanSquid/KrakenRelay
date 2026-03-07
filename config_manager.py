@@ -39,6 +39,8 @@ class ConfigManager:
                 'squelch_threshold': -40,
                 'squelch_hysteresis_db': 3.0,
                 'squelch_hang_time': 0.25,
+                'carrier_validity_min_delta': 0.1,
+                'carrier_validity_timeout_sec': 2.5,
                 'highpass_enabled': True,
                 'highpass_cutoff': 300,
                 'limiter_enabled': True,
@@ -51,7 +53,11 @@ class ConfigManager:
                 'compressor_release_ms': 200,
                 'compressor_threshold_db': -18,
                 'dual_output': False,
-                'output_device_2': None
+                'output_device_2': None,
+                'notch_enabled': False,
+                'notch_frequency_hz': 60.0,
+                'notch_q': 30.0,
+                'notch_harmonics': 1,
             },
             'repeater': {
                 'auto_start': True,

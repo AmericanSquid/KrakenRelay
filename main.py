@@ -49,8 +49,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--list-devices", action="store_true", help="List available audio devices and exit.")
 
     # Web UI bind options
-    parser.add_argument("--bind", default="0.0.0.0", help="(Web UI) Bind address (default: 0.0.0.0).")
-    parser.add_argument("--port", type=int, default=5000, help="(Web UI) Port (default: 5000).")
+    parser.add_argument("--bind", default="0.0.0.0", help="(Web UI) Bind address (default: 0.0.0.0).") # For localhost only bind to 127.0.0.1
+    parser.add_argument("--port", type=int, default=6973, help="(Web UI) Port (default: 6973).")
 
     return parser.parse_args()
 
@@ -306,7 +306,7 @@ def run_web(args: argparse.Namespace) -> None:
             logging.exception("[WebUI] Controller cleanup failed during shutdown.")
 
         try:
-            real_cleanup()
+            am.cleanup()
         except Exception:
             logging.exception("[WebUI] Audio cleanup failed during shutdown.")
 

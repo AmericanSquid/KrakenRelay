@@ -15,6 +15,7 @@ class RepeaterController:
     # Initialization & Setup #
     #------------------------# 
     def __init__(self, input_device, output_device, config, audio_manager):
+#        print(">>> RepeaterController INIT <<<")
         # Core Configuration
         self.config = config
         self.chunk_size = self.config.config['audio']['chunk_size']
@@ -40,6 +41,19 @@ class RepeaterController:
         sr = float(a.get("sample_rate", 48000))
         chunk = int(a.get("chunk_size", 1920))
 
+        # --- NOTCH FILTER CONFIG ---
+        notch_enabled = bool(a.get("notch_enabled", False))
+        notch_freq = float(a.get("notch_frequency_hz", 60.0))
+        notch_q = float(a.get("notch_q", 30.0))
+        notch_harmonics = int(a.get("notch_harmonics", 1))
+
+        logging.info(
+            "Notch config: enabled=%s freq=%s q=%s harmonics=%s",
+            notch_enabled,
+            notch_freq,
+            notch_q,
+            notch_harmonics
+        )
         def compressor_macro(percent: float):
             """
             percent: 0–100 (UI-facing)
@@ -66,6 +80,14 @@ class RepeaterController:
             cutoff_hz=float(a.get("highpass_cutoff", 300)),
             sample_rate=sr,
         )
+        
+        self.dsp_rx.configure_notch(
+            enabled=notch_enabled,
+            freq_hz=notch_freq,
+            q=notch_q,
+            harmonics=notch_harmonics,
+            sample_rate=sr
+        )
 
         # RX compressor: OFF (keep RX neutral and predictable)
         self.dsp_rx.configure_compressor(
@@ -91,6 +113,14 @@ class RepeaterController:
             cutoff_hz=300,
             sample_rate=sr,
         )
+        
+        self.dsp_tx.configure_notch(
+            enabled=notch_enabled,
+            freq_hz=notch_freq,
+            q=notch_q,
+            harmonics=notch_harmonics,
+            sample_rate=sr
+        )
 
         self.dsp_tx.configure_compressor(
             enabled=bool(a.get("compressor_enabled", False)),
@@ -108,7 +138,6 @@ class RepeaterController:
             sample_rate=sr,
             chunk_len=chunk,
         )
-
         # Audio Stream Set Up
         self.input_stream = None
         self.output_stream = None
@@ -520,19 +549,42 @@ class RepeaterController:
             logging.error(f"[Input] Input stream read failed: {e}")
             raise
 
-        samples = np.frombuffer(data, dtype=np.int16).astype(np.float32)
+        raw_samples = np.frombuffer(data, dtype=np.int16).astype(np.float32)
 
+        if raw_samples.size == 0:
+            self.current_rms = 0.0
+            raw_samples = np.zeros(self.chunk_size, dtype=np.float32)
+        else:
+            raw_samples = np.nan_to_num(raw_samples, nan=0.0, posinf=0.0, neginf=0.0)
+
+        # Keep a filtered RX copy that will be used for squelch / buffering / TX audio
+        samples = raw_samples.copy()
+
+        if (
+            self.config.config["audio"].get("highpass_enabled", False)
+            or self.config.config["audio"].get("notch_enabled", False)
+        ):
+            samples = self.dsp_rx.process_int16_to_int16(samples)
+
+        samples = np.asarray(samples, dtype=np.float32)
+        samples = np.nan_to_num(samples, nan=0.0, posinf=0.0, neginf=0.0)
+
+        # Meter / RMS should reflect the filtered RX audio
         if samples.size == 0:
             self.current_rms = 0.0
         else:
-            samples = np.nan_to_num(samples, nan=0.0, posinf=0.0, neginf=0.0)
             self.current_rms = float(np.sqrt(np.mean(samples * samples)))
 
         self._update_meter(samples, "rx")
-        # Check squelch first
+
         now = time.time()
+
+        # IMPORTANT:
+        # - squelch should see filtered RX audio
+        # - carrier-validity should see raw RX level movement
         level_db = float(calculate_db_level(samples))
-    
+        raw_level_db = float(calculate_db_level(raw_samples))
+
         prev_open = self.squelch_open
         squelch_open_now = self._update_squelch_state(level_db, now)
 
@@ -570,12 +622,12 @@ class RepeaterController:
             if just_opened or self._carrier_probe_start is None:
                 self._carrier_valid = False
                 self._carrier_probe_start = now  # "no-movement timer" starts now
-                self._carrier_last_level_db = level_db
+                self._carrier_last_level_db = raw_level_db
 
-            # Compute movement since last frame
+            # Compute movement since last frame USING RAW LEVEL
             last = self._carrier_last_level_db
-            delta = 0.0 if last is None else abs(level_db - float(last))
-            self._carrier_last_level_db = level_db
+            delta = 0.0 if last is None else abs(raw_level_db - float(last))
+            self._carrier_last_level_db = raw_level_db
 
             if delta >= cv_min_delta:
                 # We saw "movement" -> mark valid and reset the no-movement timer
@@ -622,21 +674,14 @@ class RepeaterController:
             self._carrier_last_level_db = None
 
         if squelch_open_now:
-            # Process audio chain
-            if (
-                self.config.config["audio"].get("highpass_enabled", False)
-                or self.config.config["audio"].get("compressor_enabled", False)
-            ):
-                #if np.max(np.abs(samples)) > 16:
-                samples = self.dsp_rx.process_int16_to_int16(samples)
-
             s = np.asarray(samples, dtype=np.float32)
             s = np.nan_to_num(s, nan=0.0, posinf=0.0, neginf=0.0)
-            self.current_rms = float(np.sqrt(np.mean(s*s)))
+            self.current_rms = float(np.sqrt(np.mean(s * s)))
 
             if not self.transmitting:
                 if just_opened:
                     logging.info("Squelch opened - Starting Tx")
+
             self.handle_transmission(samples)
         else:
             self.current_rms = 0
@@ -645,7 +690,7 @@ class RepeaterController:
                     logging.info("Silence persists beyond tail time. Stopping transmission.")
                     self.stop_transmission()
                 else:
-                    # 🚨 We're in the tail hang time — KEEP AUDIO FLOWING
+                    # Keep audio flowing during tail hang
                     self._send_pcm(self._silence_chunk)
             else:
                 pass
@@ -717,9 +762,13 @@ class RepeaterController:
             self.config.config["audio"].get("limiter_enabled", False)
             or self.config.config["audio"].get("compressor_enabled", False)
             or self.config.config["audio"].get("highpass_enabled", False)
+            or self.config.config["audio"].get("notch_enabled", False)
         ):
             #if np.max(np.abs(samples)) > 16:
             samples = self.dsp_tx.process_int16_to_int16(samples)
+
+       # output_samples = samples * 10 ** (self.config.config['audio']['tx_gain_db'] / 20)
+       # output_data = output_samples.astype(np.int16).tobytes()
 
         self._update_meter(samples, "tx")
         check_clipping(samples)
@@ -737,7 +786,7 @@ class RepeaterController:
             # Handle Conversion (slow/fallback path)
             # Clip to int16 range
             pcm = np.clip(np.asarray(pcm), -32768, 32767).astype(np.int16)
-            data = pcm.tobytes()
+            data = pcm.tobytes()        
 
         # Primary output
         try:
@@ -846,5 +895,4 @@ class RepeaterController:
             if len(chunk) < chunk_size:
                 chunk = np.pad(chunk, (0, chunk_size - len(chunk)))
             self._send_tx_chunk(chunk)
-
 
