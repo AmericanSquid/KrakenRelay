@@ -14,6 +14,17 @@ class DSPChain:
 
     def configure_hpf(self, enabled, order, cutoff_hz, sample_rate):
         lib.dspchain_set_hpf(self._ch, int(enabled), order, cutoff_hz, sample_rate)
+        
+    def configure_notch(self, enabled, freq_hz, q, harmonics, sample_rate):
+        """Configure a mains-hum notch filter."""
+        if not hasattr(lib, "dspchain_set_notch"):
+            if enabled:
+                raise RuntimeError(
+                    "kraken_dsp extension missing dspchain_set_notch(). "
+                    "Rebuild via: (cd kraken_dsp && python build_dsp.py)"
+                )
+            return
+        lib.dspchain_set_notch(self._ch, int(enabled), float(freq_hz), float(q), int(harmonics), float(sample_rate))
 
     def configure_compressor(
         self,

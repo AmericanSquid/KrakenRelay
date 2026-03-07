@@ -30,6 +30,9 @@ typedef struct {
     int hpf_enabled;
     SOSFilter hpf;
 
+    int notch_enabled;
+    SOSFilter notch;
+
     int compressor_enabled;
     CompressorState comp;
 
@@ -45,12 +48,24 @@ typedef struct {
     float lim_threshold;
     float lim_att_coeff;
     float lim_rel_coeff;
+    
+    float notch_freq_hz;
+    float notch_q;
+    int notch_harmonics;
 } DSPChain;
 
 void dspchain_init(DSPChain* ch);
 void dspchain_reset(DSPChain* ch);
 
 void dspchain_set_hpf(DSPChain* ch, int enabled, int order, float cutoff_hz, float sample_rate);
+void dspchain_set_notch(
+    DSPChain* ch,
+    int enabled,
+    float freq_hz,
+    float q,
+    int harmonics,
+    float sample_rate
+);
 void dspchain_set_compressor(DSPChain* ch, int enabled, float threshold_db, float ratio,
                              float attack_coeff, float release_coeff, float makeup_gain);
 void dspchain_set_limiter(DSPChain* ch, int enabled, float threshold, float att_coeff, float rel_coeff);

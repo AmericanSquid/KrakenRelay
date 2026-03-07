@@ -2,6 +2,10 @@
 #include "kraken_dsp.h"
 #include <math.h>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 static inline float clampf(float v, float lo, float hi) {
     return v < lo ? lo : (v > hi ? hi : v);
 }
@@ -17,6 +21,28 @@ static void biquad_highpass_rbj(float cutoff_hz, float q, float fs,
     float _b0 = (1.0f + cw) * 0.5f;
     float _b1 = -(1.0f + cw);
     float _b2 = (1.0f + cw) * 0.5f;
+
+    float a0  = 1.0f + alpha;
+    float _a1 = -2.0f * cw;
+    float _a2 = 1.0f - alpha;
+
+    _b0 /= a0; _b1 /= a0; _b2 /= a0;
+    _a1 /= a0; _a2 /= a0;
+
+    *b0 = _b0; *b1 = _b1; *b2 = _b2;
+    *a1 = _a1; *a2 = _a2;
+}
+
+static void biquad_notch_rbj(float freq_hz, float q, float fs,
+                             float* b0, float* b1, float* b2, float* a1, float* a2) {
+    const float w0 = 2.0f * (float)M_PI * freq_hz / fs;
+    const float cw = cosf(w0);
+    const float sw = sinf(w0);
+    const float alpha = sw / (2.0f * q);
+
+    float _b0 = 1.0f;
+    float _b1 = -2.0f * cw;
+    float _b2 = 1.0f;
 
     float a0  = 1.0f + alpha;
     float _a1 = -2.0f * cw;
@@ -59,6 +85,34 @@ void sos_init_highpass_butter(SOSFilter* f, int order, float cutoff_hz, float sa
                             &f->b0[0], &f->b1[0], &f->b2[0], &f->a1[0], &f->a2[0]);
         biquad_highpass_rbj(cutoff_hz, q2, sample_rate,
                             &f->b0[1], &f->b1[1], &f->b2[1], &f->a1[1], &f->a2[1]);
+    }
+
+    sos_reset(f);
+}
+
+void sos_init_notch(SOSFilter* f, float freq_hz, float q, float sample_rate) {
+    sos_init_notch_harmonics(f, freq_hz, q, 1, sample_rate);
+}
+
+void sos_init_notch_harmonics(SOSFilter* f, float base_hz, float q, int harmonics, float sample_rate) {
+    if (!f) return;
+
+    base_hz = clampf(base_hz, 5.0f, 0.49f * sample_rate);
+    q = clampf(q, 0.1f, 100.0f);
+    if (harmonics < 1) harmonics = 1;
+    if (harmonics > KR_MAX_SECTIONS) harmonics = KR_MAX_SECTIONS;
+
+    f->sections = 0;
+
+    for (int h = 1; h <= harmonics; h++) {
+        float f_hz = base_hz * (float)h;
+        if (f_hz > 0.49f * sample_rate) break;
+
+        biquad_notch_rbj(f_hz, q, sample_rate,
+                         &f->b0[f->sections], &f->b1[f->sections], &f->b2[f->sections],
+                         &f->a1[f->sections], &f->a2[f->sections]);
+        f->sections++;
+        if (f->sections >= KR_MAX_SECTIONS) break;
     }
 
     sos_reset(f);
@@ -211,13 +265,20 @@ void f32_to_s16(const float* x, int n, int16_t* out) {
 void dspchain_init(DSPChain* ch) {
     if (!ch) return;
     ch->hpf_enabled = 0;
+    ch->notch_enabled = 0;
     ch->compressor_enabled = 0;
     ch->limiter_enabled = 0;
 
     ch->hpf.sections = 0;
+    ch->notch.sections = 0;
     sos_reset(&ch->hpf);
+    sos_reset(&ch->notch);
     compressor_reset(&ch->comp);
     limiter_reset(&ch->lim);
+
+    ch->notch_freq_hz = 60.0f;
+    ch->notch_q = 30.0f;
+    ch->notch_harmonics = 1;
 
     ch->comp_threshold_db = -18.0f;
     ch->comp_ratio = 3.0f;
@@ -233,6 +294,7 @@ void dspchain_init(DSPChain* ch) {
 void dspchain_reset(DSPChain* ch) {
     if (!ch) return;
     sos_reset(&ch->hpf);
+    sos_reset(&ch->notch);
     compressor_reset(&ch->comp);
     limiter_reset(&ch->lim);
 }
@@ -242,6 +304,21 @@ void dspchain_set_hpf(DSPChain* ch, int enabled, int order, float cutoff_hz, flo
     ch->hpf_enabled = enabled ? 1 : 0;
     if (ch->hpf_enabled) {
         sos_init_highpass_butter(&ch->hpf, order, cutoff_hz, sample_rate);
+    }
+}
+
+void dspchain_set_notch(DSPChain* ch, int enabled, float freq_hz, float q, int harmonics, float sample_rate) {
+    if (!ch) return;
+    ch->notch_enabled = enabled ? 1 : 0;
+    ch->notch_freq_hz = freq_hz;
+    ch->notch_q = q;
+    ch->notch_harmonics = harmonics;
+
+    if (ch->notch_enabled) {
+        sos_init_notch_harmonics(&ch->notch, freq_hz, q, harmonics, sample_rate);
+    } else {
+        ch->notch.sections = 0;
+        sos_reset(&ch->notch);
     }
 }
 
@@ -280,6 +357,9 @@ void dspchain_process_inplace(DSPChain* ch, float* x, int n) {
 
     if (ch->hpf_enabled)
         sos_process_inplace(&ch->hpf, x, n);
+
+    if (ch->notch_enabled)
+        sos_process_inplace(&ch->notch, x, n);
 
     if (ch->compressor_enabled)
         compressor_process_inplace(
