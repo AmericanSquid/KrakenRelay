@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>KrakenRelay Repeater Controller</title>
-
   <style>
     :root{
       --bg: #14151a;
@@ -95,6 +94,24 @@
       color: var(--muted);
       font-size: 12px;
       box-shadow: inset 0 0 0 1px rgba(255,255,255,.03);
+    }
+    .pill-row{
+      display: flex;
+      gap: 6px;
+    }
+    .pill.temp-ok {
+      background-color: #2e7d32;
+    }
+
+    .pill.temp-warn {
+      background-color: #ff9800;
+    }
+
+    .pill.temp-hot {
+      background-color: #c62828;
+    }
+    .pill.unknown {
+      background-color: #7f8c8d;
     }
 
     /* Lights */
@@ -336,7 +353,7 @@
 
     /* Section titles */
     .secTitle{
-      margin: 0 0 10px;
+      margin: 16px 0 10px;
       font-size: 12px;
       color: rgba(162,89,255,.95);
       letter-spacing: .3px;
@@ -357,6 +374,41 @@
     .needs-restart{
       outline: 2px solid rgba(255,204,51,.55);
       box-shadow: 0 0 0 3px rgba(255,204,51,.10);
+    }
+    .log-container {
+      height: 220px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 12px;
+      background: #0f1116;
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 8px;
+      padding: 6px;
+    }
+
+    .log-line {
+      white-space: pre-wrap;
+      word-break: break-word;
+      padding: 2px 0;
+    }
+
+    .log-INFO { color: #d0d0d0; }
+    .log-WARNING { color: #ffcc33; }
+    .log-ERROR { color: #ff5252; }
+    .log-DEBUG { color: #7aa2ff; }
+    .grid{
+      display:grid;
+      grid-template-columns: 380px 1fr;
+      grid-template-areas:
+        "left right"
+        "logs logs";
+      gap: 14px;
+      align-items:start;
+    }
+
+    /* add this */
+    .grid > .card:last-child{
+      grid-column:1 / -1;
     }
   </style>
 </head>
@@ -382,11 +434,20 @@
       </div>
 
       <div class="status-pills">
-        <span class="pill"><span class="dot rx" id="rx-dot"></span> RX</span>
-        <span class="pill"><span class="dot tx" id="tx-dot"></span> TX</span>
-        <span class="pill" id="run-pill">Stopped</span>
+        <div class="pill-row">
+          <span class="pill"><span class="dot rx" id="rx-dot"></span> RX</span>
+          <span class="pill"><span class="dot tx" id="tx-dot"></span> TX</span>
+          <span class="pill" id="run-pill">Stopped</span>
+        </div>
+        <div class="pill-row">
+          <span class="pill" id="temp-pill">CPU _</span>
+          <span class="pill" id="load-pill">LOAD _</span>
+          <span class="pill" id="uptime-pill">UP _</span>
+        </div>
+        <div class="pill-row">
+          <span class="pill" id="mumble-pill">Mumble</span>
+        </div>
       </div>
-      
       <div class="metaLine" id="auto-start-error" style="color: #ff5252; font-weight: bold; display: none;">
         <!-- Error will show here -->
       </div>
@@ -400,7 +461,7 @@
       <div class="grid">
 
         <!-- LEFT: Live control -->
-        <div class="card">
+        <div class="card" style="grid-area:left;">
           <div class="card-hd">
             <h2>Live Status</h2>
             <span class="pill" id="ptt-pill">PTT: Not Started</span>
@@ -435,6 +496,7 @@
               </div>
             </div>
 
+
             <div style="height: 14px;"></div>
 
             <div class="secTitle">Devices</div>
@@ -464,15 +526,26 @@
               <button type="button" id="test-ptt" class="btn-ghost">Test PTT</button>
             </div>
 
+            <div style="height:14px;"></div>
+
+            <div class="secTitle">Recent Events</div>
+
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+              <span style="font-size:12px;color:#aaa">Live log output</span>
+              <button type="button" onclick="clearLogs()" class="btn-ghost" style="font-size:11px;">Clear</button>
+            </div>
+
+            <div id="logContainer" class="log-container"></div>
+
             <div class="footer">
               <span id="status-note">Status updates every 500ms</span>
               <span>Open Source Repeater Controller by American Squid/K3AYV</span>
             </div>
           </div>
         </div>
-
+        
         <!-- RIGHT: Settings -->
-        <div class="card">
+        <div class="card" style="grid-area:right;">
           <div class="card-hd">
             <h2>Configuration</h2>
 
@@ -747,7 +820,20 @@
     </form>
   </div>
 
+
+
   <script>
+    // Reverse-proxy subdirectory support (/goodsam, /stjoes, etc.)
+    const MOUNT_PREFIX = (() => {
+      const seg = window.location.pathname.split('/').filter(Boolean)[0];
+      return seg ? `/${seg}` : '';
+    })();
+
+    function apiUrl(path){
+      const p = String(path || '').replace(/^\/+/, '');
+      return MOUNT_PREFIX ? `${MOUNT_PREFIX}/${p}` : `/${p}`;
+    }
+
     // ====== UI Readouts (sliders) ======
     const squelchSlider = document.getElementById('squelch');
     const squelchValue = document.getElementById('squelch-value');
@@ -799,7 +885,7 @@
     // ====== Start/Stop ======
     document.getElementById('start-btn').addEventListener('click', () => {
       const formData = new FormData(document.getElementById('config-form'));
-      fetch('/start', { method: 'POST', body: formData })
+      fetch(apiUrl('start'), { method: 'POST', body: formData })
         .then(res => res.json())
         .then(data => {
           if (data.status === 'running') {
@@ -813,7 +899,7 @@
     });
 
     document.getElementById('stop-btn').addEventListener('click', () => {
-      fetch('/stop', { method: 'POST' })
+      fetch(apiUrl('stop'), { method: 'POST' })
         .then(res => res.json())
         .then(() => {
           document.getElementById('start-btn').disabled = false;
@@ -824,21 +910,23 @@
     // These endpoints aren’t in your web_ui.py yet — leaving buttons in place,
     // but we won’t crash the UI if they 404.
     document.getElementById('id-btn').addEventListener('click', () => {
-      fetch('/manual_id', { method: 'POST' }).catch(()=>{});
+      fetch(apiUrl('manual_id'), { method: 'POST' }).catch(()=>{});
     });
     document.getElementById('test-ptt').addEventListener('click', () => {
-      fetch('/ptt_test', { method: 'POST' }).catch(()=>{});
+      fetch(apiUrl('ptt_test'), { method: 'POST' }).catch(()=>{});
     });
 
     // ====== Status polling (slow) ======
     let uiRunning = false;
 
     setInterval(() => {
-      fetch('/status', { cache: "no-store" })
+      fetch(apiUrl('status'), { cache: "no-store" })
         .then(res => res.json())
         .then(status => {
           uiRunning = !!status.running;
 
+          const startBtn = document.getElementById('start-btn');
+          const stopBtn = document.getElementById('stop-btn');
           const txDot = document.getElementById('tx-dot');
           const rxDot = document.getElementById('rx-dot');
           const runPill = document.getElementById('run-pill');
@@ -867,6 +955,14 @@
             document.getElementById('next-id-text').textContent = '—';
             document.getElementById('tot-bar').style.width = '0%';
             return;
+          }
+
+          if (status.running) {
+            startBtn.disabled = true;
+            stopBtn.disabled  = false;
+          } else {
+            startBtn.disabled = false;
+            stopBtn.disabled  = true;
           }
 
           // lights
@@ -941,7 +1037,7 @@
     setInterval(() => {
       if (!uiRunning) { targetRxDb = -60; targetTxDb = -60; return; }
 
-      fetch('/meter', { cache: "no-store" })
+      fetch(apiUrl('meter'), { cache: "no-store" })
         .then(r => r.json())
         .then(m => {
           if (!m.running) { targetRxDb = -60; targetTxDb = -60; return; }
@@ -1078,7 +1174,7 @@
     lockEl.checked = true;       // conservative default
     setLockedUI(true);
 
-    fetch("/lock", { cache: "no-store" })
+    fetch(apiUrl("lock"), { cache: "no-store" })
       .then(r => r.json())
       .then(d => {
         lockEl.checked = !!d.locked;
@@ -1106,7 +1202,7 @@
         }
 
         setLockedUI(false);
-        postJSON("/lock", { locked: false })
+        postJSON(apiUrl("lock"), { locked: false })
           .catch(err => {
            console.error("Failed to unlock backend config:", err);
             setSavePill("Backend lock failed", "bad");
@@ -1117,7 +1213,7 @@
       }
 
       setLockedUI(true);
-      postJSON("/lock", { locked: true })
+      postJSON(apiUrl("lock"), { locked: true })
         .catch(err => {
         console.error("Failed to lock backend config:", err);
         setSavePill("Backend lock failed", "bad");
@@ -1134,7 +1230,7 @@
 
       const value = (el.type === "checkbox") ? el.checked : el.value;
 
-      postJSON("/config/live", {key, value})
+      postJSON(apiUrl("config/live"), {key, value})
         .then(resp => {
           if (resp && resp.status === "restart_required"){
             restartBadge.style.display = "inline-flex";
@@ -1166,7 +1262,7 @@
 
     // Save button
     saveBtn.addEventListener("click", () => {
-      fetch("/config/save", {method:"POST"})
+      fetch(apiUrl("config/apply"), {method:"POST"})
         .then(r => r.json())
         .then(d => {
           if (d && d.status === "ok") setSavePill("Saved ✅", "ok");
@@ -1177,6 +1273,157 @@
 
     // ensure dependent disables are correct on load
     syncConditionalDisables();
+
+    async function updateSystemStats() {
+      try {
+        const res = await fetch(apiUrl("api/stats"));
+        const stats = await res.json();
+
+        updateTempPill(stats);
+        updateLoadPill(stats.load);
+        updateUptimePill(stats.uptime);
+        updateMumblePill(stats);
+
+      } catch (err) {
+        console.error("Failed to fetch system stats", err);
+      }
+    }
+
+    function updateTempPill(stats) {
+      const pill = document.getElementById("temp-pill");
+      if (!pill) return;
+
+      const temps = [stats.cpu_temp, stats.nvme_temp].filter(t => t !== null);
+
+      if (temps.length === 0) {
+        pill.textContent = "TEMP —";
+        pill.className = "pill";
+        return;
+      }
+
+      const maxTemp = Math.max(...temps);
+
+      let cls =
+        maxTemp >= 80 ? "temp-hot" :
+        maxTemp >= 70 ? "temp-warn" :
+                        "temp-ok";
+
+      pill.textContent = `TEMP ${maxTemp.toFixed(0)}°C`;
+      pill.className = `pill ${cls}`;
+
+      pill.title =
+        `CPU: ${stats.cpu_temp?.toFixed(1) ?? "—"}°C\n` +
+        `NVMe: ${stats.nvme_temp?.toFixed(1) ?? "—"}°C`;
+    }
+
+    function updateLoadPill(load) {
+      const pill = document.getElementById("load-pill");
+      if (!pill) return;
+
+      if (load === null) {
+        pill.textContent = "LOAD —";
+        pill.className = "pill";
+        return;
+      }
+
+      let cls =
+        load >= 2.0 ? "temp-hot" :
+        load >= 1.0 ? "temp-warn" :
+                      "temp-ok";
+
+      pill.textContent = `LOAD ${load.toFixed(2)}`;
+      pill.className = `pill ${cls}`;
+    }
+
+    function updateUptimePill(seconds) {
+      const pill = document.getElementById("uptime-pill");
+      if (!pill) return;
+
+      pill.textContent = `UP ${formatUptime(seconds)}`;
+    }
+
+    function formatUptime(seconds) {
+      if (seconds === null) return "—";
+
+      const d = Math.floor(seconds / 86400);
+      const h = Math.floor((seconds % 86400) / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+
+      if (d > 0) return `${d}d ${h}h`;
+      if (h > 0) return `${h}h ${m}m`;
+      return `${m}m`;
+    }
+
+    function updateMumblePill(stats) {
+      const pill = document.getElementById("mumble-pill");
+      if (!pill) return;
+
+      // backend provides stats.mumble (boolean)
+      const active = stats.mumble;
+
+      if (active === true) {
+        pill.textContent = "Mumble OK";
+        pill.className = "pill temp-ok";
+      } else if (active === false) {
+        pill.textContent = "Mumble DOWN";
+        pill.className = "pill temp-hot";
+      } else {
+        pill.textContent = "Mumble ?";
+        pill.className = "pill unknown";
+      }
+    }
+
+    // poll every 5s
+    setInterval(updateSystemStats, 5000);
+    updateSystemStats();
+    let lastLogId = 0;
+
+    async function fetchLogs() {
+      try {
+        const res = await fetch(`/logs?after=${lastLogId}`);
+        const data = await res.json();
+
+        const container = document.getElementById("logContainer");
+        if (!container) return;
+
+        const shouldAutoscroll =
+          container.scrollHeight - container.scrollTop - container.clientHeight < 40;
+
+        data.entries.forEach(entry => {
+
+          lastLogId = entry.id;
+
+          const line = document.createElement("div");
+          line.className = `log-line log-${entry.level}`;
+
+          const time = new Date(entry.ts * 1000).toLocaleTimeString();
+
+          line.textContent =
+            `[${time}] ${entry.level} ${entry.message}`;
+
+          container.appendChild(line);
+        });
+
+        if (shouldAutoscroll) {
+          container.scrollTop = container.scrollHeight;
+        }
+
+      } catch (err) {
+        console.error("Log fetch failed:", err);
+      }
+    }
+
+    setInterval(fetchLogs, 1000);
+
+    async function clearLogs() {
+
+      await fetch("/logs/clear", { method: "POST" });
+
+      const container = document.getElementById("logContainer");
+      if (container) container.innerHTML = "";
+
+      lastLogId = 0;
+    }
   </script>
 
 </body>
