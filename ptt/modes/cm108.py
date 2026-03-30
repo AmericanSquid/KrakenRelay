@@ -1,0 +1,59 @@
+import logging
+from runtime.logging_utils import debug_enabled
+
+class CM108PTT:
+    def __init__(self, device="/dev/hidraw0", pin=3):
+        self.device = device
+        self.pin = pin
+        self.working = True
+        if debug_enabled():
+            logging.debug(f"[CM108PTT] Initialized PTT on {self.device}, GPIO pin {self.pin}")
+
+    def _set_gpio(self, state):
+        if not 1 <= self.pin <= 8:
+            logging.error(f"CM108PTT: GPIO pin must be 1–8, got {self.pin}")
+            self.working = False
+            return
+        shift = self.pin - 1
+        iomask = 1 << shift
+        iodata = state << shift
+        buf = bytes([0x00, 0x00, iomask, iodata, 0x00])
+
+        #if not self._write_report(buf):
+        #    self.working = False
+        #    return
+        #self.working = True 
+
+        try:
+            with open(self.device, "wb", buffering=0) as f:
+                f.write(buf)
+            self.working = True
+        except Exception as e:
+            logging.error(f"CM108PTT: FAILED to write to {self.device}: {e}")
+            self.working = False 
+
+    def key(self):
+        try:
+            self._set_gpio(1)
+        except Exception as e:
+            logging.error(f"CM108PTT: key() error: {e}")
+
+
+    def unkey(self):
+        try:
+            self._set_gpio(0)
+        except Exception as e:
+            logging.error(f"CM108PTT: unkey() error: {e}")
+
+    def _write_report(self, data):
+        if str(self.device).upper() == "FAKE":
+            logging.info(f"[FAKE CM108] report={list(data)}")
+            return True
+
+        try:
+            with open(self.device, "wb", buffering=0) as f:
+                f.write(data)
+            return True
+        except Exception as e:
+            logging.error(f"CM108PTT: FAILED to write to {self.device}: {e}")
+            return False

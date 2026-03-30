@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KrakenRelay Operator Guide</title>
+  <link rel="stylesheet" href="/static/css/help.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">KrakenRelay Help Center</div>
+      <div class="search-wrap">
+        <input id="searchInput" class="search-input" type="search" placeholder="Search this guide…">
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <aside class="sidebar">
+      <h2>Contents</h2>
+      <ul class="toc" id="toc">
+        <li><a href="#overview">Overview</a></li>
+        <li><a href="#signal-path">Signal Path</a></li>
+        <li><a href="#live-status">Understanding the Live Status Area</a></li>
+        <li><a href="#devices-main-buttons">Devices and Main Buttons</a></li>
+        <li><a href="#config-ctl">Configuration Controls</a></li>
+        <li><a href="#audio-settings">Audio Settings</a></li>
+        <li><a href="#repeater-settings">Repeater Settings</a></li>
+        <li><a href="#identification">Identification</a></li>
+        <li><a href="#tot">Timeout Timer (TOT)</a></li>
+        <li><a href="#ptt-settings">PTT Settings</a></li>
+        <li><a href="#practical-guidance">Practical Operating Guidance</a></li>
+        <li><a href="#troubleshooting">Troubleshooting</a></li>
+      </ul>
+    </aside>
+
+    <section class="content">
+      <section class="hero">
+        <h1>KrakenRelay Operator Guide</h1>
+        <p>
+          This guide explains how to operate, understand, and troubleshoot KrakenRelay.
+        </p>
+
+        <div class="quick-links">
+          <span class="chip">Searchable</span>
+          <span class="chip">Practical troubleshooting</span>
+          <span class="chip">Operator-focused</span>
+          <span class="chip">Quick reference friendly</span>
+        </div>
+
+        <div class="callout success">
+          <div class="callout-title">Tip</div>
+          Use the search box above to quickly locate controls, settings, and troubleshooting steps.
+        </div>
+      </section>
+
+      <!-- OVERVIEW -->
+      <article class="section searchable-section" id="overview" data-search="overview system summary what krakenrelay is introduction">
+        <h2><strong>Overview</strong></h2>
+        <p>
+          KrakenRelay is a software-defined repeater controller.
+          It performs the control functions of a traditional hardware repeater controller,
+          but it does so in software using the host computer’s audio system, signal analysis,
+          DSP processing, and PTT control.
+        </p>
+        <p>
+          In the current web build, the operator page exposes live status, device selection,
+          repeater controls, identification settings, timeout timer controls, and PTT settings.
+        </p>
+
+        <h3><strong>What KrakenRelay Controls</strong></h3>
+        <p>KrakenRelay is responsible for:</p>
+        <ul>
+          <li>deciding when receiver audio should be repeated</li>
+          <li>applying software audio processing</li>
+          <li>keying and unkeying the transmitter</li>
+          <li>sending CW identification</li>
+          <li>generating courtesy and TOT tones</li>
+          <li>enforcing the timeout timer</li>
+          <li>reporting live status through the web UI</li>
+        </ul>
+
+        <h3><strong>What KrakenRelay Does Not Control</strong></h3>
+        <p>
+          KrakenRelay does not set or correct radio hardware alignment.
+          It does not directly control RF gain, front-end sensitivity,
+          PL/CTCSS decoding, transmitter deviation, RF power, or analog
+          gain inside the sound interface. It also does not manage antennas,
+          feedlines, site hardware, or external linking systems.
+        </p>
+        <p>
+          In other words, KrakenRelay controls the software audio path and transmitter
+          keying, not the physical radio alignment.
+        </p>
+      </article>
+
+      <!-- SIGNAL PATH -->
+      <article class="section searchable-section" id="signal-path" data-search="signal path audio flow receiver transmitter alsa portaudio">
+        <h2>Signal Path</h2>
+        <p>The practical signal path is:</p>
+
+        <p><strong>Receiver → audio interface → PortAudio/ALSA backend → receiver audio processing → software squelch detection → transmitter audio processing → PTT control → transmitter</strong></p>
+
+        <p>
+          This means KrakenRelay’s decisions are based on the audio that reaches the computer, not directly on RF strength.
+          A strong on-air signal can still appear weak to KrakenRelay if the receiver or sound interface audio level is set too low.
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">Important</div>
+          The audio meter in KrakenRelay is not an RF S-meter. It reflects digital audio level, not received signal strength at the antenna.
+        </div>
+      </article>
+
+      <!-- LIVE STATUS -->
+      <article class="section searchable-section" id="live-status" data-search="controls indicators status buttons settings ui web interface">
+        <h2>Understanding the Live Status Area</h2>
+
+        <div class="grid-2">
+          <div class="mini-card">
+            <h3>RX and TX Indicators</h3>
+            <p>
+              The <strong>RX</strong> light shows that received audio is above the software squelch threshold.
+              The <strong>TX</strong> light shows that KrakenRelay is currently transmitting.
+              The <strong>Running</strong> status pill shows whether the controller is stopped or running.
+            </p>
+          </div>
+
+          <div class="mini-card">
+            <h3>CPU, Load, and Uptime</h3>
+            <p>
+              The <strong>TEMP</strong>, <strong>LOAD</strong>, and <strong>UP</strong> pills report host-system health.
+              Temperature shows the highest available CPU or NVMe temperature.
+              Load shows the host’s 1-minute load average.
+              Uptime shows host uptime, not repeater uptime.
+            </p>
+            <p>
+              These values are useful when diagnosing sluggish response, dropouts, or thermal issues on Raspberry Pi or other small systems.
+            </p>
+          </div>
+
+          <div class="mini-card">
+            <h3>PTT Status</h3>
+            <p>
+              The <strong>PTT</strong> status pill reports how KrakenRelay sees the transmit keying path.
+              In VOX mode it reports VOX operation.
+              In CM108 mode it checks whether the configured <code>hidraw</code> device exists and whether it is writable.
+            </p>
+            <p>
+              Messages such as <strong>Device Missing</strong> or <strong>Permission Denied</strong>
+              point to Linux device-path or permission problems.
+            </p>
+          </div>
+
+          <div class="mini-card">
+            <h3>Audio Meter</h3>
+            <p>The audio meter shows <strong>digital audio level</strong>, not RF signal strength. The value is displayed in <strong>dBFS</strong>:</p>
+            <ul>
+              <li><strong>0 dBFS</strong> = full digital scale</li>
+              <li>Values near <strong>0 dBFS</strong> indicate clipping risk</li>
+              <li>Normal speech should generally peak around <strong>-15 dBFS to -6 dBFS</strong></li>
+            </ul>
+            <p>
+              A very important detail in this build: the meter display is effectively <strong>floored at about -60 dBFS</strong>,
+              so a reading near <strong>-60</strong> means “very quiet or below the displayed range,” not necessarily an exact measured noise floor.
+            </p>
+          </div>
+
+          <div class="mini-card">
+            <h3>TOT, Next ID, and Status Badges</h3>
+            <p>
+              The <strong>TOT</strong> readout and progress bar show how much transmit time has been used against the configured timeout limit.
+              <strong>Next ID</strong> shows the countdown until the next scheduled CW identification.
+              <strong>Sending ID</strong> indicates that an identification is being transmitted now.
+            </p>
+            <p>
+              If present, a <strong>TOT Lockout</strong> indication means the repeater has timed out and is temporarily preventing new transmissions.
+            </p>
+          </div>
+
+          <div class="mini-card">
+            <h3>Clipping and Limiting Badges</h3>
+            <p>
+              A <strong>Clipping</strong> indication means audio has reached digital full scale and distortion is likely.
+              A <strong>Limiting</strong> indication means the limiter is actively reducing peaks to help prevent overload.
+            </p>
+            <p>
+              These indicators are best treated as warning signs that gain staging or limiter settings should be reviewed.
+            </p>
+          </div>
+
+          <div class="mini-card">
+            <h3>Maintenance and Restart Badges</h3>
+
+            <p>
+              The <strong>Restart</strong> badge indicates that the KrakenRelay controller
+              is currently restarting. During this time the repeater will temporarily
+              stop processing audio and the transmitter will not be keyed.
+            </p>
+
+            <p>
+              The <strong>Maintenance</strong> badge indicates that someone is actively
+              working on the system. The repeater may still operate normally, but
+              adjustments, restarts, or configuration changes may temporarily interrupt
+              service.
+            </p>
+
+            <p>
+              These badges are informational and help operators understand why the
+              repeater may briefly stop responding or behave differently during
+              maintenance or system restarts.
+            </p>
+          </div>
+
+          <div class="mini-card">
+            <h3>Auto-Start Error Message</h3>
+            <p>
+              If Auto-Start is enabled but KrakenRelay cannot find the previously saved audio devices at startup,
+              an error may appear near the top of the UI.
+            </p>
+
+            <div class="callout warning">
+            <div class="callout-title">Device Change</div>
+            This usually means a USB audio device changed numbering, was unplugged, or is no longer available.
+            </div>
+
+          </div>
+
+          <div class="mini-card">
+            <h3>Mumble Status</h3>
+            <p>
+              If your deployment includes a Mumble or linking status indicator, it generally shows whether the client service is running.
+            </p>
+            <p>
+              This does not always guarantee that a remote network connection is actually established.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <!-- DEVICES / MAIN BUTTONS -->
+      <article class="section searchable-section" id="devices-main-buttons" data-search="devices buttons input output start stop cw id ptt">
+        <h2>Devices and Main Buttons</h2>
+
+        <h3>Input Device</h3>
+        <p>
+          The <strong>Input Device</strong> is the audio source from the receiver.
+          This should be the sound interface connected to the receiver’s audio output,
+          whether that is discriminator audio, speaker audio, or line audio depending on your installation.
+        </p>
+        <p>
+          If the wrong input device is selected, KrakenRelay will not detect signals correctly even if the receiver is hearing traffic.
+        </p>
+
+        <h3>Output Device</h3>
+        <p>
+          The <strong>Output Device</strong> is the audio path that feeds the transmitter.
+          If the wrong output device is selected, KrakenRelay may key normally while sending no usable audio to the transmitter.
+        </p>
+
+        <h3>Start</h3>
+        <p>
+          The <strong>Start</strong> button launches the KrakenRelay controller using the selected audio devices.
+          When the system starts successfully, status indicators begin updating and the repeater becomes operational.
+        </p>
+
+        <h3>Stop</h3>
+        <p>
+          The <strong>Stop</strong> button shuts down the repeater controller and forces the transmitter to unkey.
+          Use this before maintenance, restarting the service, or changing critical settings.
+        </p>
+
+        <h3>Send CW ID</h3>
+        <p>
+          This button sends an immediate Morse code station identification.
+          It is useful for testing CW settings such as pitch, speed, and volume, or for manually identifying the repeater when needed.
+        </p>
+
+        <h3>Test PTT</h3>
+        <p>
+          The <strong>Test PTT</strong> control is intended to key the transmitter briefly in order to verify that the PTT interface is functioning correctly.
+        </p>
+        <p>
+          This control is currently a placeholder for later implementation.
+        </p>
+      </article>
+
+      <!-- CONFIG -->
+      <article class="section searchable-section" id="config-ctl" data-search="configuration controls lock unlock save auto-start restart required">
+        <h2>Configuration Controls</h2>
+
+        <h3>Lock / Unlock</h3>
+        <p>
+          Configuration settings are locked by default to prevent accidental changes during operation.
+          Unlocking the configuration allows parameters to be edited.
+        </p>
+        <p>
+          Once changes are complete, it is recommended to lock the configuration again.
+        </p>
+
+        <h3>Save</h3>
+        <p>
+          The <strong>Save</strong> button writes configuration changes to disk so they
+          persist after a restart. After saving, KrakenRelay briefly stops and then
+          restarts the audio streams in order to apply the updated settings.
+        </p>
+
+        <div class="callout warning">
+        <div class="callout-title">Operational Note</div>
+        During this process the repeater may stop passing audio for a short period
+        while the audio pipeline is reinitialized. This is normal behavior.
+        </div>
+
+        <h3>Auto-Start</h3>
+        <p>
+          When enabled, <strong>Auto-Start</strong> automatically launches the repeater controller when the KrakenRelay service starts.
+          This allows the repeater to recover automatically after a system reboot.
+        </p>
+
+        <h3>Restart Required Badge</h3>
+        <p>
+          Some settings are safest applied after restarting the controller or service.
+          If your build includes a restart-required indication, treat it as a reminder that certain changes may not take full effect until a restart has been performed.
+        </p>
+      </article>
+
+      <!-- AUDIO SETTINGS -->
+      <article class="section searchable-section" id="audio-settings" data-search="audio distorted distortion clipping noise floor squelch rx gain levels dsp signal detection hpf limiter compressor notch">
+        <h2>Audio Settings</h2>
+
+        <h3>Sample Rate</h3>
+        <ul>
+          <li>Determines the digital audio sample rate used by the system.</li>
+          <li>Higher sample rates increase processing load but may improve fidelity.</li>
+          <li>This setting normally only needs to be configured during initial setup.</li>
+        </ul>
+
+        <h3>Chunk Size</h3>
+        <ul>
+          <li>Defines how many audio samples are processed at a time.</li>
+          <li>Smaller values reduce latency but increase CPU load.</li>
+          <li>Larger values increase stability but add a small amount of delay.</li>
+        </ul>
+
+        <div class="callout">
+        <div class="callout-title">Operational Note</div>
+        For deployments linking over Mumble, the chunk size should be set in multiples of 960.
+        For most other deployments, the chunk size should be set in multiples of 1024.
+        </div>
+
+        <h3>High-Pass Filter</h3>
+        <ul>
+          <li>Removes low-frequency hum, rumble, and other unwanted low-end noise.</li>
+          <li>Improves speech clarity by reducing energy that does not help intelligibility.</li>
+        </ul>
+
+        <div class="callout">
+        <div class="callout-title">Helpful Tip</div>
+        Setting the HPF at 300Hz or lower will remove low-end noise without impacting speech.
+        You can use the <code>rx_spectrum</code> and <code>detect_hum</code> scripts included
+        in the software for help with setting your HPF and notch.
+        </div>
+
+        <h3>Limiter</h3>
+        <ul>
+          <li>Prevents transmit audio from exceeding safe digital levels.</li>
+          <li>Reduces peaks that could otherwise cause clipping or harsh distortion.</li>
+          <li>Helps maintain more consistent transmitted audio.</li>
+        </ul>
+
+        <h3>Compression</h3>
+        <p>
+          The compressor reduces dynamic range so that quieter speech becomes more
+          intelligible while loud peaks are controlled. This can improve overall
+          readability of repeater audio.
+        </p>
+        <p>
+          Compressor parameters are currently configured through the
+          <code>config.yaml</code> file and are not exposed directly in the web
+          interface. Changes to compression settings must therefore be made in the
+          configuration file and applied by restarting or reloading the system.
+        </p>
+
+        <h3>Notch Filter</h3>
+        <p>
+          The notch filter removes narrowband interference such as steady hum or
+          other constant tones that may be present in the receive audio.
+        </p>
+        <p>
+          Like compression, notch filter settings are configured through
+          <code>config.yaml</code> and are not currently adjustable through the
+          web interface.
+        </p>
+
+        <h3>Squelch Threshold</h3>
+        <p>
+          The squelch threshold determines when KrakenRelay considers a signal to be present.
+          If set too low, the repeater may key from noise.
+          If set too high, weak signals may not open the repeater.
+        </p>
+
+        <div class="callout warning">
+          <div class="callout-title">Gain staging matters</div>
+          <p>
+            KrakenRelay does not replace proper analog audio setup. Receiver audio that is too low can prevent reliable keying. Audio that is too high can cause clipping and poor transmitted quality.
+          </p>
+          <p>
+            A good starting point for many installations is approximately
+            <strong>-40 dBFS</strong> with the default DSP configuration.
+            This value may vary depending on receiver audio levels and the local noise environment.
+          </p>
+        </div>
+
+        <h3>Dual Output</h3>
+        <p>
+          Dual Output allows transmit audio to be sent to a second audio device.
+          This can be used to feed an additional transmitter, a monitor system, or another downstream audio path.
+        </p>
+
+      </article>
+
+      <!-- REPEATER SETTINGS -->
+      <article class="section searchable-section" id="repeater-settings" data-search="hang time carrier delay anti-kerchunk courtesy tone repeater behavior">
+        <h2>Repeater Settings</h2>
+
+        <h3>Hang Time</h3>
+        <p>
+          <strong>Hang Time</strong> is how long the transmitter remains keyed after receive audio disappears.
+          A shorter hang time keeps the repeater feeling tight and efficient.
+          A longer hang time can make operation feel smoother, but it also occupies the channel longer.
+        </p>
+
+        <h3>Carrier Delay</h3>
+        <p>
+          <strong>Carrier Delay</strong> is primarily used when the transmitter is keyed
+          using VOX rather than hardware PTT.
+        </p>
+
+        <div class="callout">
+        <div class="callout-title">VOX Keying Behavior</div>
+        When Carrier Delay is enabled, KrakenRelay briefly transmits a short noise burst to
+        trigger the transmitter's VOX circuit. During this time, received audio is
+        temporarily buffered. Once the transmitter has keyed and stabilized, the
+        buffered audio is played back so the beginning of the transmission is not lost.
+        </div>
+
+        <p>
+           In hardware PTT configurations, this setting is usually less critical because
+           the transmitter keys immediately. However, a small carrier delay can still be
+           useful in some installations to ensure the transmitter is fully keyed before
+           normal audio begins.
+        </p>
+
+        <h3>Anti-Kerchunk</h3>
+        <p>
+          <strong>Anti-Kerchunk</strong> helps prevent the repeater from responding to very brief accidental key-ups,
+          squelch pops, or short noise bursts.
+        </p>
+        <p>
+          It does this by requiring a signal to remain present for a minimum amount of time before the repeater begins transmitting.
+        </p>
+
+        <h3>Courtesy Tone</h3>
+        <p>
+          The <strong>Courtesy Tone</strong> is a short two-tone "pip" that plays after
+          a transmission ends, indicating that the repeater has returned to receive mode.
+       </p>
+
+       <p>
+         In the web interface, operators can:
+       </p>
+       <ul>
+         <li><strong>Enable or disable</strong> the courtesy tone.</li>
+         <li><strong>Adjust the courtesy tone volume</strong> relative to normal transmit audio.</li>
+       </ul>
+
+       <p>
+         The tone used by KrakenRelay is a two-tone pip sound. The exact tone
+         frequencies can be modified through an advanced setting in the
+         <code>config.yaml</code> file if customization is desired.
+       </p>
+      </article>
+
+      <!-- IDENTIFICATION -->
+      <article class="section searchable-section" id="identification" data-search="identification cw callsign interval speed pitch volume morse code">
+        <h2>Identification</h2>
+
+        <h3>Callsign, Interval, CW Enable, Speed, Pitch, Volume</h3>
+        <p>
+          These settings control the station identification function.
+          The operator can set the station callsign, the interval between IDs, whether CW ID is enabled,
+          and the speed, pitch, and volume used for Morse code transmission.
+        </p>
+        <p>
+          CW identification should be configured to match the station’s regulatory requirements and operating practice.
+        </p>
+      </article>
+
+      <!-- TOT -->
+      <article class="section searchable-section" id="tot" data-search="timeout timer tot lockout timeout">
+          <h2>Timeout Timer (TOT)</h2>
+
+          <h3>TOT Enable and Duration</h3>
+          <p>
+              The <strong>Time-Out Timer (TOT)</strong> protects the transmitter and repeater
+              system from excessively long or stuck transmissions. When enabled, KrakenRelay
+              measures continuous transmit time and automatically stops the transmission
+              when the configured limit is reached.
+          </p>
+
+          <div class="callout danger">
+          <div class="callout-title">Timeout Event</div>
+          When the timeout occurs, KrakenRelay immediately <strong>unkeys the transmitter</strong>
+          and stops passing audio from the receiver to the transmitter.
+          </div>
+
+          <h3>TOT Tone and Volume</h3>
+          <p>
+              When a timeout event occurs, KrakenRelay can generate a warning tone to
+              indicate that the transmission was terminated by the Time-Out Timer.
+          </p>
+          <p>
+              The tone's pitch and volume can be adjusted so the timeout condition is
+              clearly noticeable without being excessively loud.
+          </p>
+
+          <h3>Lockout and Lockout Time</h3>
+          <p>
+              After a timeout event, KrakenRelay may enter a <strong>lockout</strong> period.
+              During this time the repeater will refuse new transmissions and will not
+              pass audio to the transmitter.
+          </p>
+
+          <p>
+              This prevents the repeater from immediately re-keying if the timeout was
+              caused by a stuck microphone, continuous input signal, or persistent noise
+              condition.
+          </p>
+
+          <p>
+              The <strong>Lockout Time</strong> determines how long the repeater remains
+              in this blocked state before normal operation resumes.
+          </p>
+      </article>
+
+      <!-- PTT -->
+      <article class="section searchable-section" id="ptt-settings" data-search="ptt settings vox cm108 hidraw gpio pin device path">
+        <h2>PTT Settings</h2>
+
+        <h3>PTT Mode</h3>
+        <p>
+          KrakenRelay typically supports <strong>VOX</strong> and <strong>CM108</strong> keying modes.
+          VOX depends on the transmitter’s own audio-operated keying behavior.
+          CM108 mode uses a compatible USB audio device with GPIO exposed through a Linux <code>hidraw</code> node.
+        </p>
+
+        <h3>Device Path</h3>
+        <p>
+          In CM108 mode, the <strong>Device Path</strong> points to the Linux device node used for keying,
+          usually something like <code>/dev/hidraw0</code>.
+        </p>
+        <p>
+          If the status shows <strong>Device Missing</strong>, the path may be wrong or the device may have changed numbering.
+          If the status shows <strong>Permission Denied</strong>, Linux permissions or udev rules should be checked.
+        </p>
+
+        <h3>GPIO Pin</h3>
+        <p>
+          The <strong>GPIO Pin</strong> setting selects which CM108 GPIO line is used for PTT.
+          This must match the way the interface is physically wired.
+        </p>
+        <p>
+          If PTT does not work even though the correct device is selected, verify the configured GPIO pin and the physical wiring.
+        </p>
+        <p>
+          If you are using a Digirig Lite or similar interface, you should select Pin 3.
+        </p>
+      </article>
+
+      <!-- PRACTICAL GUIDANCE -->
+      <article class="section searchable-section" id="practical-guidance" data-search="practical operating guidance receive audio squelch auto-start setup">
+        <h2>Practical Operating Guidance</h2>
+
+        <h3>Setting Receive Audio</h3>
+        <p>
+          Receiver audio should be adjusted so that normal speech peaks fall roughly
+          between <strong>-15 dBFS and -6 dBFS</strong> on the meter.
+        </p>
+        
+        <p>
+          Audio that is too low may prevent the repeater from detecting signals
+          reliably. Audio that is too high may cause distortion, clipping, or
+          excessive limiter action.
+        </p>
+        
+        <div class="callout success">
+        <div class="callout-title">Setup Tip</div>
+        A helpful technique during setup is to use the <strong>Dual Output</strong>
+        feature to send transmit audio to a second audio interface connected to a
+        monitor speaker or headset. This allows operators to listen to the processed
+        transmit audio directly while adjusting receiver levels and DSP settings.
+        </div>
+        
+        <p>
+          Monitoring the transmit audio path can make it much easier to identify
+          clipping, distortion, or excessive compression while calibrating the system.
+        </p>
+
+        <h3>Setting Squelch</h3>
+        <p>
+          Start by setting the squelch threshold slightly above the idle noise floor.
+          If the repeater keys when no signal is present, increase the threshold slightly.
+          If weak but usable signals fail to open the repeater, decrease the threshold slightly.
+        </p>
+
+        <p>
+          A good starting point for many installations is approximately
+          <strong>-40 dBFS</strong> with the default DSP configuration.
+          This value may vary depending on receiver audio levels and the local noise environment.
+        </p>
+        
+        <p>
+          Additional advanced squelch behavior can be tuned in the
+          <code>config.yaml</code> file. These parameters include:
+        </p>
+
+        <ul>
+          <li>
+            <strong>Hysteresis</strong> — prevents rapid squelch chatter by requiring the
+            signal level to fall several dB below the opening threshold before the
+            repeater closes.
+          </li>
+          <li>
+            <strong>Hang Time</strong> — keeps the transmitter keyed briefly after a
+            audio drops below the squelch threshold, which prevents the repeater from dropping between
+            short pauses in speech.
+          </li>
+        </ul>
+
+        <h3>Using Auto-Start</h3>
+        <p>
+          Auto-Start should be enabled only after the system has been tested and confirmed to start correctly with the selected devices.
+        </p>
+        <p>
+          It is a good practice to perform at least one successful manual start before relying on automatic startup after reboot.
+        </p>
+      </article>
+
+      <!-- TROUBLESHOOTING -->
+      <article class="section searchable-section" id="troubleshooting" data-search="troubleshooting repeater not keying false keying distorted audio no transmit problems diagnosis">
+        <h2>Troubleshooting</h2>
+
+        <h3>Repeater will not key</h3>
+        <p>
+          Check that the correct input and output audio devices are selected, verify the squelch setting,
+          and confirm that the PTT device is accessible to the system.
+        </p>
+
+        <h3>Repeater keys when no one is talking</h3>
+        <p>
+          This usually indicates a high noise floor, excessive receiver audio, or squelch set too low.
+          Reduce receiver audio gain or increase the squelch threshold slightly.
+        </p>
+        <p>
+          Configuring the Carrier Validity variables in the <code>config.yaml</code> file can reduce
+          transmissions that become stuck due to a high noise floor.
+        </p>
+
+        <h3>Audio is too quiet</h3>
+        <p>
+          Increase the receiver audio output level or the sound interface capture gain.
+          Also verify that the correct input device is selected.
+        </p>
+
+        <h3>Audio is distorted</h3>
+        <p>
+          Reduce the receiver audio level or adjust the limiter settings.
+          Distortion usually indicates that the input level is too high or that clipping is occurring somewhere in the chain.
+        </p>
+
+        <h3>Autostart fails after reboot</h3>
+        <p>
+          USB audio devices may have changed numbering.
+          Re-select the correct devices and start the system again manually.
+        </p>
+
+        <h3>PTT Status says permission denied</h3>
+        <p>
+          The system does not have permission to access the PTT device.
+          Check Linux device permissions, group membership, or udev rules.
+        </p>
+
+        <h3>System feels slow or frozen</h3>
+        <p>
+          Check system temperature and CPU load.
+          If necessary, restart the KrakenRelay service after the underlying problem has been corrected.
+        </p>
+
+        <details>
+          <summary>Common operator checklist</summary>
+          <ul>
+            <li>Confirm the correct input and output devices are selected.</li>
+            <li>Check whether RX is opening when a signal is present.</li>
+            <li>Verify the audio meter shows sensible levels during speech.</li>
+            <li>Check PTT status for missing-device or permission problems.</li>
+            <li>Review squelch, timeout, and lockout settings.</li>
+          </ul>
+        </details>
+      </article>
+    </section>
+  </main>
+
+  <button id="backToTop" class="back-to-top" type="button">Top</button>
+  <script src="/static/js/help.js" defer></script>
+
+</body>
+</html>

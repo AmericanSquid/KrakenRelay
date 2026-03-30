@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>KrakenRelay Repeater Controller</title>
+  <link rel="stylesheet" href="/static/css/index.css">
+</head>
+
+<body>
+
+  {% set audio = config.get('audio', {}) %}
+  {% set repeater = config.get('repeater', {}) %}
+  {% set ident = config.get('identification', {}) %}
+  {% set tot = config.get('tot', {}) %}
+  {% set ptt = config.get('ptt', {}) %}
+  {% set ptt_mode = (ptt.get('mode', 'VOX')|string)|upper %}
+
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <div>
+          <h1>KrakenRelay</h1>
+          <span class="sub">An Open Source Repeater Controller</span>
+          <span class="sub">by American Squid/K3AYV</span>
+        </div>
+      </div>
+
+      <div class="status-pills">
+        <div class="pill-row">
+          <span class="pill"><span class="dot rx" id="rx-dot"></span> RX</span>
+          <span class="pill"><span class="dot tx" id="tx-dot"></span> TX</span>
+          <span class="pill state-stopped" id="run-pill">Stopped</span>
+        </div>
+        <div class="pill-row">
+          <span class="pill" id="temp-pill">CPU _</span>
+          <span class="pill" id="load-pill">LOAD _</span>
+          <span class="pill" id="uptime-pill">UP _</span>
+        </div>
+        <div class="pill-row">
+          <span class="pill" id="mumble-pill">Mumble</span>
+        </div>
+        <a href="/help" target="_blank" rel="noopener noreferrer" class="pill help-link">
+          Help
+        </a>
+      </div>
+
+      <div class="metaLine" id="auto-start-error">
+        <!-- Error will show here -->
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <form id="config-form">
+
+      <div class="grid">
+
+        <!-- LEFT: Live control -->
+        <div class="card live-card" style="grid-area:left;">
+          <div class="card-hd">
+            <div>
+              <h2>Live Status</h2>
+                          </div>
+            <span class="pill" id="ptt-pill">PTT: Not Started</span>
+          </div>
+
+          <div class="card-bd">
+            <div id="maintenanceIndicator" class="status-light off">
+              Normal Operation
+            </div>
+
+            <div class="meterWrap">
+              <div class="meterShell">
+
+                <div class="meter">
+                  <div class="meterFill" id="level-bar"></div>
+                </div>
+              </div>
+
+              <div class="meterMeta">
+                <div class="metaBlock">
+                  <div class="metaLine">
+                    Audio: <span id="level-text">-60.0 dB</span>
+                  </div>
+
+                  <div class="metaLine">
+                    TOT: <span id="tot-text">—</span>
+                  </div>
+                  <div class="bar"><div id="tot-bar"></div></div>
+
+                  <div class="metaLine" style="margin-top:10px;">
+                    Next ID: <span id="next-id-text">—</span>
+                    <span id="id-indicator" class="badge" style="display:none;">Sending ID</span>
+                    <span id="tot-lockout-indicator" class="badge clip" style="display:none;">TOT Lockout</span>
+                  </div>
+
+                  <div class="metaLine" style="margin-top:10px; gap:10px;">
+                    <span id="clip-alert" class="badge clip hidden">CLIPPING</span>
+                    <span id="limit-alert" class="badge limit hidden">LIMITING</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card-stack">
+              <div>
+                <div class="secTitle">Devices</div>
+
+                <div class="field" style="margin-bottom:12px;">
+                  <label for="input-device">Input Device</label>
+                  <select id="input-device" name="input_index">
+                    {% for dev in input_devices %}
+                      <option value="{{ dev.index }}">{{ dev.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label for="output-device">Output Device</label>
+                  <select id="output-device" name="output_index">
+                    {% for dev in output_devices %}
+                      <option value="{{ dev.index }}">{{ dev.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <div class="secTitle">Actions</div>
+                <div class="btnrow">
+                  <button type="button" id="start-btn" class="btn-primary">Start</button>
+                  <button type="button" id="stop-btn" class="btn-danger" disabled>Stop</button>
+                  <button type="button" id="id-btn" class="btn-ghost">Send CW ID</button>
+                  <button type="button" id="test-ptt" class="btn-ghost">Test PTT</button>
+                </div>
+              </div>
+
+              <div>
+                <div class="secTitle">Recent Events</div>
+
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px;">
+                  <span style="font-size:12px;color:#aaa">Live log output</span>
+                  <button type="button" onclick="clearLogs()" class="btn-ghost" style="font-size:11px;padding:8px 10px;">Clear</button>
+                </div>
+
+                <div id="logContainer" class="log-container"></div>
+              </div>
+
+              <div class="footer">
+                <span id="status-note">Status updates every 500ms</span>
+                <span>Open Source Repeater Controller by American Squid/K3AYV</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: Settings -->
+        <div class="card config-card" style="grid-area:right;">
+          <div class="card-hd">
+            <div>
+              <h2>Configuration</h2>
+                          </div>
+
+            <div class="hdr-controls">
+              <span class="pill warn" id="restart-badge" style="display:none;">Restart required</span>
+              <span class="pill" id="save-status" style="display:none;"></span>
+
+              <button type="button" id="save-btn" class="mini-btn btn-primary">Save</button>
+
+              <label class="pill lockpill" title="Unlock to edit config">
+                <input type="checkbox" id="cfg-lock" checked>
+                <span id="lock-state" style="font-weight:800;">LOCKED</span>
+              </label>
+
+              <label class="pill lockpill" title="Check to enable auto-start">
+                <input type="checkbox" id="auto-start" data-key="repeater.auto_start"
+                  {% if repeater.get('auto_start', False) %}checked{% endif %}>
+                <span>Auto-Start</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="card-bd">
+            <div class="config-tabs" role="tablist" aria-label="Configuration sections">
+              <button type="button" class="tab-btn is-active" data-tab-btn="tab-audio" aria-controls="tab-audio" aria-selected="true">Audio</button>
+              <button type="button" class="tab-btn" data-tab-btn="tab-repeater" aria-controls="tab-repeater" aria-selected="false">Repeater</button>
+              <button type="button" class="tab-btn" data-tab-btn="tab-identification" aria-controls="tab-identification" aria-selected="false">Identification</button>
+              <button type="button" class="tab-btn" data-tab-btn="tab-tot" aria-controls="tab-tot" aria-selected="false">TOT</button>
+              <button type="button" class="tab-btn" data-tab-btn="tab-ptt" aria-controls="tab-ptt" aria-selected="false">PTT</button>
+            </div>
+
+            <div class="config-panels">
+              <section class="config-panel is-active" id="tab-audio" role="tabpanel">
+                <div class="secTitle">Audio</div>
+
+                <div class="row">
+                  <div class="field">
+                    <label for="sample-rate">Sample Rate (Hz)</label>
+                    <select id="sample-rate" data-key="audio.sample_rate">
+                      {% set sr = audio.get('sample_rate', 48000) %}
+                      <option value="8000"  {% if sr == 8000 %}selected{% endif %}>8000</option>
+                      <option value="16000" {% if sr == 16000 %}selected{% endif %}>16000</option>
+                      <option value="44100" {% if sr == 44100 %}selected{% endif %}>44100</option>
+                      <option value="48000" {% if sr == 48000 %}selected{% endif %}>48000</option>
+                    </select>
+                  </div>
+
+                  <div class="field">
+                    <label for="chunk-size">Chunk Size (samples)</label>
+                    <input type="number" id="chunk-size" data-key="audio.chunk_size" min="256" step="1"
+                           value="{{ audio.get('chunk_size', 1920) }}">
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="field">
+                    <label for="squelch">Squelch (dB)</label>
+                    <input type="range" id="squelch" data-key="audio.squelch_threshold" min="-60" max="-20"
+                           value="{{ audio.get('squelch_threshold', -40) }}" />
+                    <div class="metaLine">Current: <span id="squelch-value">{{ audio.get('squelch_threshold', -40) }} dB</span></div>
+                  </div>
+
+                  <div class="field">
+                    <label>High-pass Filter</label>
+                    <div class="toggle">
+                      <input type="checkbox" id="highpass" data-key="audio.highpass_enabled"
+                        {% if audio.get('highpass_enabled', True) %}checked{% endif %}>
+                      <span>Enable</span>
+                    </div>
+
+                    <label for="highpass-cutoff" style="margin-top:10px;">Cutoff (Hz)</label>
+                    <input type="range" id="highpass-cutoff" data-key="audio.highpass_cutoff" min="100" max="1000"
+                           value="{{ audio.get('highpass_cutoff', 300) }}"
+                           {% if not audio.get('highpass_enabled', True) %}disabled{% endif %} />
+                    <div class="metaLine">Current: <span id="highpass-value">{{ audio.get('highpass_cutoff', 300) }} Hz</span></div>
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="field">
+                    <label>Limiter</label>
+                    <div class="toggle">
+                      <input type="checkbox" id="limiter-enabled" data-key="audio.limiter_enabled"
+                        {% if audio.get('limiter_enabled', True) %}checked{% endif %}>
+                      <span>Enable</span>
+                    </div>
+
+                    <label for="limiter-threshold" style="margin-top:10px;">Threshold (0–1)</label>
+                    <input type="range" id="limiter-threshold" data-key="audio.limiter_threshold" min="0.10" max="1.00" step="0.001"
+                           value="{{ audio.get('limiter_threshold', 0.85) }}" />
+                    <div class="metaLine">
+                      Current: <span id="limiter-value">{{ '%.3f' % audio.get('limiter_threshold', 0.85) }}</span>
+                    </div>
+                  </div>
+
+                  <div class="field">
+                    <label>Dual Output</label>
+                    <div class="toggle">
+                      <input type="checkbox" id="dual-output" data-key="audio.dual_output"
+                        {% if audio.get('dual_output', False) %}checked{% endif %}>
+                      <span>Enable second output</span>
+                    </div>
+
+                    <label for="output-device-2" style="margin-top:10px;">Output Device 2</label>
+                    <select id="output-device-2" data-key="audio.output_device_2"
+                            {% if not audio.get('dual_output', False) %}disabled{% endif %}>
+                      {% set od2 = audio.get('output_device_2', 0) %}
+                      {% for dev in output_devices %}
+                        <option value="{{ dev.index }}" {% if dev.index == od2 %}selected{% endif %}>{{ dev.name }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                </div>
+              </section>
+
+              <section class="config-panel" id="tab-repeater" role="tabpanel" hidden>
+                <div class="secTitle">Repeater</div>
+
+                <div class="row">
+                  <div class="field">
+                    <label for="tail-time">Hang Time (s)</label>
+                    <input type="number" step="0.1" id="tail-time" data-key="repeater.tail_time"
+                           value="{{ repeater.get('tail_time', 2.0) }}" />
+                  </div>
+
+                  <div class="field">
+                    <label for="carrier-delay">Carrier Delay (s)</label>
+                    <input type="number" step="0.1" id="carrier-delay" data-key="repeater.carrier_delay"
+                           value="{{ repeater.get('carrier_delay', 0.0) }}" />
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="field">
+                    <label for="kerchunk">Anti-Kerchunk (s)</label>
+                    <input type="number" step="0.1" id="kerchunk" data-key="repeater.anti_kerchunk_time"
+                           value="{{ repeater.get('anti_kerchunk_time', 0.0) }}" />
+                  </div>
+
+                  <div class="field">
+                    <label>Courtesy Tone</label>
+                    <div class="toggle">
+                      <input type="checkbox" id="courtesy-tone" data-key="repeater.courtesy_tone_enabled"
+                        {% if repeater.get('courtesy_tone_enabled', True) %}checked{% endif %}>
+                      <span>Enable</span>
+                    </div>
+
+                    <label for="courtesy-vol" style="margin-top:10px;">Courtesy Volume (0–100)</label>
+                    <input type="range" id="courtesy-vol" data-key="repeater.courtesy_tone_volume" min="0" max="100" step="1"
+                           value="{{ repeater.get('courtesy_tone_volume', 80) }}" />
+                    <div class="metaLine">Current: <span id="courtesy-vol-value">{{ repeater.get('courtesy_tone_volume', 80) }}</span></div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="config-panel" id="tab-identification" role="tabpanel" hidden>
+                <div class="secTitle">Identification</div>
+
+                <div class="row">
+                  <div class="field">
+                    <label for="callsign">Callsign</label>
+                    <input type="text" id="callsign" data-key="identification.callsign"
+                           value="{{ ident.get('callsign', '') }}" style="text-transform:uppercase;">
+                  </div>
+
+                  <div class="field">
+                    <label for="id-interval">ID Interval (min)</label>
+                    <input type="number" id="id-interval" data-key="identification.interval_minutes" min="1" max="60"
+                           value="{{ ident.get('interval_minutes', 10) }}">
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="field">
+                    <label>CW ID</label>
+                    <div class="toggle">
+                      <input type="checkbox" id="cw-enabled" data-key="identification.cw_enabled"
+                        {% if ident.get('cw_enabled', True) %}checked{% endif %}>
+                      <span>Enable</span>
+                    </div>
+                  </div>
+
+                  <div class="field">
+                    <label for="cw-speed">CW Speed (WPM)</label>
+                    <input type="number" id="cw-speed" data-key="identification.cw_wpm" min="5" max="30"
+                           value="{{ ident.get('cw_wpm', 20) }}">
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="field">
+                    <label for="cw-pitch">CW Pitch (Hz)</label>
+                    <input type="number" id="cw-pitch" data-key="identification.cw_pitch" min="300" max="2000"
+                           value="{{ ident.get('cw_pitch', 523) }}">
+                  </div>
+
+                  <div class="field">
+                    <label for="cw-vol">CW Volume (0–100)</label>
+                    <input type="range" id="cw-vol" data-key="identification.cw_volume" min="0" max="100" step="1"
+                           value="{{ ident.get('cw_volume', 50) }}">
+                    <div class="metaLine">Current: <span id="cw-vol-value">{{ ident.get('cw_volume', 50) }}</span></div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="config-panel" id="tab-tot" role="tabpanel" hidden>
+                <div class="secTitle">Timeout Timer</div>
+
+                <div class="row">
+                  <div class="field">
+                    <label>TOT</label>
+                    <div class="toggle">
+                      <input type="checkbox" id="tot-enabled" data-key="tot.tot_enabled"
+                        {% if tot.get('tot_enabled', True) %}checked{% endif %}>
+                      <span>Enable</span>
+                    </div>
+                  </div>
+
+                  <div class="field">
+                    <label for="tot-time">Duration (s)</label>
+                    <input type="number" id="tot-time" data-key="tot.tot_time" min="1" max="600" step="0.1"
+                           value="{{ tot.get('tot_time', 180.0) }}">
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="field">
+                    <label for="tot-tone">TOT Tone Pitch (Hz)</label>
+                    <input type="number" id="tot-tone" data-key="tot.tot_tone_freq" min="300" max="2500" step="1"
+                           value="{{ tot.get('tot_tone_freq', 1200) }}">
+                  </div>
+
+                  <div class="field">
+                    <label for="tot-vol">TOT Volume (0–100)</label>
+                    <input type="range" id="tot-vol" data-key="tot.tot_volume" min="0" max="100" step="1"
+                           value="{{ tot.get('tot_volume', 100) }}">
+                    <div class="metaLine">Current: <span id="tot-vol-value">{{ tot.get('tot_volume', 100) }}</span></div>
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="field">
+                    <label>Lockout</label>
+                    <div class="toggle">
+                      <input type="checkbox" id="tot-lockout" data-key="tot.tot_lockout_enabled"
+                        {% if tot.get('tot_lockout_enabled', True) %}checked{% endif %}>
+                      <span>Enable</span>
+                    </div>
+                  </div>
+
+                  <div class="field">
+                    <label for="lockout-time">Lockout (s)</label>
+                    <input type="number" id="lockout-time" data-key="tot.tot_lockout_time" min="0" max="600" step="0.1"
+                           value="{{ tot.get('tot_lockout_time', 15.0) }}">
+                  </div>
+                </div>
+              </section>
+
+              <section class="config-panel" id="tab-ptt" role="tabpanel" hidden>
+                <div class="secTitle">PTT</div>
+
+                <div class="row">
+                  <div class="field">
+                    <label for="ptt-mode">PTT Mode</label>
+                    <select id="ptt-mode" data-key="ptt.mode">
+                      <option value="VOX"  {% if ptt_mode == 'VOX' %}selected{% endif %}>VOX</option>
+                      <option value="CM108" {% if ptt_mode == 'CM108' %}selected{% endif %}>CM108</option>
+                    </select>
+                  </div>
+
+                  <div class="field">
+                    <label for="ptt-device">Device Path</label>
+                    <input type="text" id="ptt-device" data-key="ptt.device_path" value="{{ ptt.get('device_path', '') }}" />
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="field">
+                    <label for="ptt-pin">GPIO Pin</label>
+                    <input type="number" id="ptt-pin" data-key="ptt.gpio_pin" min="1" max="40"
+                           value="{{ ptt.get('gpio_pin', 3) }}" />
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </form>
+  </div>
+
+  <script src="/static/js/index.js"></script>
+
+</body>
+</html>
