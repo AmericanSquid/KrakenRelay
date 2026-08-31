@@ -1,11 +1,12 @@
 import sys
+
 from audio import list_audio_devices
 from runtime import (
-    setup_logging,
     parse_args,
-    sig_handler
+    setup_logging,
 )
-from runtime.launch import run_web, run_headless
+from runtime.launch import run_headless, run_web
+
 
 # -------------#
 # Entry-point  #
@@ -22,6 +23,7 @@ def main() -> None:
         run_headless(args)
     else:
         run_web(args)
+
 
 if __name__ == "__main__":
     main()
