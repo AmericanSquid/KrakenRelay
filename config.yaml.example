@@ -1,37 +1,60 @@
 audio:
   sample_rate: 48000
   chunk_size: 1024
-
+  input_device:
+    id: ''
+    name: ''
+  input_index: null
+  input_device_2: 0
+  input_index_2: 0
+  input_device_2_id: ''
+  input_device_2_info:
+    id: ''
+    name: ''
+  output_device:
+    id: ''
+    name: ''
+  output_index: null
+  output_device_2: 0
+  output_device_2_id: ''
+  output_device_2_info:
+    id: ''
+    name: ''
   squelch_threshold: -40
   squelch_hysteresis_db: 3.0
   squelch_hang_time: 0.25
-
   carrier_validity_min_delta: 0.1
   carrier_validity_timeout_sec: 2.5
-
   highpass_enabled: true
   highpass_cutoff: 300
-
   limiter_enabled: true
   limiter_threshold: 0.85
-
-  compressor_enabled: true
   compressor_strength: 50
   compressor_attack_ms: 10
-  compressor_release_ms: 200
-  compressor_ratio: 3.0
-  compressor_threshold_db: -18
+  compressor_enabled: true
   compressor_makeup_db: 3
-
+  compressor_ratio: 3.0
+  compressor_release_ms: 200
+  compressor_threshold_db: -18
+  speex_ns_enabled: false
+  speex_ns: 1
+  speex_ns_db: -20
+  speex_agc: 0
+  speex_agc_level: 0
+  speex_vad: 0
+  tx_tone_eq_enabled: true
+  tx_tone: 0.0
+  dual_input: false
   dual_output: false
-  output_device_2: null
-
+  output_2_mode: simulcast
   notch_enabled: false
   notch_frequency_hz: 60.0
   notch_q: 30.0
   notch_harmonics: 1
-
-
+  notch_frequencies_hz: []
+  notch_apply_to_tx: true
+  rx_fade_in_ms: 75.0
+  rx_fade_in_start_gain: 0.30
 repeater:
   auto_start: true
   tail_time: 2.0
@@ -39,17 +62,13 @@ repeater:
   carrier_delay: 0
   courtesy_tone_enabled: true
   courtesy_tone_volume: 100
-
-
 identification:
   interval_minutes: 10
   cw_enabled: true
-  callsign: YOUR_CALLSIGN
+  callsign: KR4KEN
   cw_pitch: 523
   cw_wpm: 20
   cw_volume: 100
-
-
 tot:
   tot_enabled: true
   tot_time: 180
@@ -57,17 +76,26 @@ tot:
   tot_lockout_enabled: true
   tot_lockout_time: 5
   tot_tone_freq: 1200
-
-
 ptt:
   dual_ptt: true
-
+  mode: CM108
+  device_path: /dev/hidraw0
+  gpio_pin: '3'
+  # Used when the optional UVK5D PTT plugin is installed.
+  uvk5d_host: 127.0.0.1
+  uvk5d_port: 7355
+  uvk5d_timeout: 0.5
   primary:
     mode: CM108
-    device_path: /dev/hidrawX
-    gpio_pin: "3"
-
+    device_path: /dev/hidraw0
+    gpio_pin: '3'
+    uvk5d_host: 127.0.0.1
+    uvk5d_port: 7355
+    uvk5d_timeout: 0.5
   secondary:
     mode: CM108
-    device_path: /dev/ttyUSBX
-    gpio_pin: "3"
+    device_path: /dev/ttyUSB0
+    gpio_pin: '3'
+    uvk5d_host: 127.0.0.1
+    uvk5d_port: 7355
+    uvk5d_timeout: 0.5
