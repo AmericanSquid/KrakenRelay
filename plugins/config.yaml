@@ -1,0 +1,7 @@
+enabled:
+- recording
+plugins:
+  recording:
+    save_path: ~/Documents/KrakenRelayRecordings
+    bitrate: 64k
+    filename_prefix: krakenrelay

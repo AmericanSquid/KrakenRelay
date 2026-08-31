@@ -1,5 +1,7 @@
 import logging
+
 from runtime.logging_utils import debug_enabled
+
 
 class CM108PTT:
     def __init__(self, device="/dev/hidraw0", pin=3):
@@ -7,7 +9,9 @@ class CM108PTT:
         self.pin = pin
         self.working = True
         if debug_enabled():
-            logging.debug(f"[CM108PTT] Initialized PTT on {self.device}, GPIO pin {self.pin}")
+            logging.debug(
+                f"[CM108PTT] Initialized PTT on {self.device}, GPIO pin {self.pin}"
+            )
 
     def _set_gpio(self, state):
         if not 1 <= self.pin <= 8:
@@ -19,10 +23,10 @@ class CM108PTT:
         iodata = state << shift
         buf = bytes([0x00, 0x00, iomask, iodata, 0x00])
 
-        #if not self._write_report(buf):
+        # if not self._write_report(buf):
         #    self.working = False
         #    return
-        #self.working = True 
+        # self.working = True
 
         try:
             with open(self.device, "wb", buffering=0) as f:
@@ -30,14 +34,13 @@ class CM108PTT:
             self.working = True
         except Exception as e:
             logging.error(f"CM108PTT: FAILED to write to {self.device}: {e}")
-            self.working = False 
+            self.working = False
 
     def key(self):
         try:
             self._set_gpio(1)
         except Exception as e:
             logging.error(f"CM108PTT: key() error: {e}")
-
 
     def unkey(self):
         try:

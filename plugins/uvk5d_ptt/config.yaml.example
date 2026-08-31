@@ -1,0 +1,12 @@
+# plugins/config.yaml example fragment
+enabled:
+  - uvk5d_ptt
+
+# main config.yaml PTT example
+ptt:
+  dual_ptt: false
+  mode: UVK5D
+  uvk5d_host: 127.0.0.1
+  uvk5d_port: 7355
+  uvk5d_timeout: 0.5
+
