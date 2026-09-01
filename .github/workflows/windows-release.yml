@@ -1,12 +1,10 @@
-name: Build release binaries
+name: Build Windows release binary
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag to upload assets to
+        description: Release tag to upload the Windows asset to
         required: true
         default: v4.0.0-beta.1
       source_ref:
@@ -19,51 +17,21 @@ permissions:
 
 jobs:
   build:
-    name: ${{ matrix.asset }}
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: windows-latest
-            asset: windows-x86_64
-            extension: .exe
-          - runner: ubuntu-22.04
-            asset: linux-x86_64
-            extension: ""
-          - runner: ubuntu-24.04-arm
-            asset: linux-arm64
-            extension: ""
-          - runner: macos-15-intel
-            asset: macos-x86_64
-            extension: ""
-          - runner: macos-14
-            asset: macos-arm64
-            extension: ""
+    name: windows-x86_64
+    runs-on: windows-latest
 
     steps:
-      - name: Check out release source
+      - name: Check out build source
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name || inputs.source_ref }}
+          ref: ${{ inputs.source_ref }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install native audio dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install --yes portaudio19-dev libsndfile1-dev libspeexdsp-dev
-
-      - name: Install native audio dependencies (macOS)
-        if: runner.os == 'macOS'
-        env:
-          HOMEBREW_NO_AUTO_UPDATE: "1"
-        run: brew install portaudio libsndfile speexdsp
-
-      - name: Install native Speex dependency (Windows)
-        if: runner.os == 'Windows'
+      - name: Install native Speex dependency
         shell: pwsh
         run: |
           vcpkg install speexdsp:x64-windows
@@ -72,10 +40,8 @@ jobs:
           "CPPFLAGS=-I$(Join-Path $installRoot 'include')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "LDFLAGS=-L$(Join-Path $installRoot 'lib')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "LIBRARY_PATH=$(Join-Path $installRoot 'lib')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "PATH=$(Join-Path $installRoot 'bin');$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Install Python dependencies
-        shell: bash
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
@@ -93,11 +59,10 @@ jobs:
 
       - name: Rename executable for release
         shell: bash
-        run: mv "dist/KrakenRelay${{ matrix.extension }}" "KrakenRelay-${{ matrix.asset }}${{ matrix.extension }}"
+        run: mv "dist/KrakenRelay.exe" "KrakenRelay-windows-x86_64.exe"
 
       - name: Upload executable to GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
         shell: bash
-        run: gh release upload "$RELEASE_TAG" "KrakenRelay-${{ matrix.asset }}${{ matrix.extension }}" --clobber --repo "$GITHUB_REPOSITORY"
+        run: gh release upload "${{ inputs.tag }}" KrakenRelay-windows-x86_64.exe --clobber --repo "$GITHUB_REPOSITORY"
