@@ -9,6 +9,10 @@ on:
         description: Release tag to upload assets to
         required: true
         default: v4.0.0-beta.1
+      source_ref:
+        description: Branch or commit containing the build configuration
+        required: true
+        default: main
 
 permissions:
   contents: write
@@ -41,7 +45,7 @@ jobs:
       - name: Check out release source
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          ref: ${{ github.event.release.tag_name || inputs.source_ref }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -54,6 +58,8 @@ jobs:
 
       - name: Install native audio dependencies (macOS)
         if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
         run: brew install portaudio libsndfile speexdsp
 
       - name: Install native Speex dependency (Windows)
@@ -76,7 +82,8 @@ jobs:
           python -m pip install pyinstaller==6.16.0
 
       - name: Build the bundled DSP extension
-        run: python dsp/build_dsp.py
+        working-directory: dsp
+        run: python build_dsp.py
 
       - name: Verify native audio extensions
         run: python -c "from speexdsp_ns import NoiseSuppression; from dsp import DSPChain; print('Speex and Kraken DSP imports succeeded')"
