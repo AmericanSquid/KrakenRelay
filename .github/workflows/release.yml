@@ -66,9 +66,9 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          vcpkg install speexdsp:x64-windows
+          vcpkg install speexdsp:x64-windows-static
           $vcpkgRoot = $env:VCPKG_INSTALLATION_ROOT
-          $installRoot = Join-Path $vcpkgRoot 'installed/x64-windows'
+          $installRoot = Join-Path $vcpkgRoot 'installed/x64-windows-static'
           "CPPFLAGS=-I$(Join-Path $installRoot 'include')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "LDFLAGS=-L$(Join-Path $installRoot 'lib')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "LIBRARY_PATH=$(Join-Path $installRoot 'lib')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
