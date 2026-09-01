@@ -1,10 +1,12 @@
 name: Build Windows release binary
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag to upload the Windows asset to
+        description: Release tag to upload assets to
         required: true
         default: v4.0.0-beta.1
       source_ref:
