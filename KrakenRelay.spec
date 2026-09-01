@@ -4,7 +4,7 @@ from PyInstaller.config import CONF
 from PyInstaller.utils.hooks import collect_submodules
 
 
-ROOT = Path(CONF["spec"]).__parent
+ROOT = Path(CONF["spec"]).parent
 
 
 hiddenimports = []
