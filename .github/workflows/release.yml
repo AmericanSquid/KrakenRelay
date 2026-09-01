@@ -34,7 +34,7 @@ jobs:
           - runner: ubuntu-24.04-arm
             asset: linux-arm64
             extension: ""
-          - runner: macos-13
+          - runner: macos-15-intel
             asset: macos-x86_64
             extension: ""
           - runner: macos-14
