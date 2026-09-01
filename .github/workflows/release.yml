@@ -25,9 +25,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: windows-latest
-            asset: windows-x86_64
-            extension: .exe
           - runner: ubuntu-22.04
             asset: linux-x86_64
             extension: ""
