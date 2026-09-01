@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 from PyInstaller.config import CONF
@@ -22,24 +21,10 @@ datas = [
 ]
 
 
-binaries = []
-vcpkg_root = os.environ.get("VCPKG_INSTALLATION_ROOT")
-if vcpkg_root:
-    vcpkg_speex_dll = (
-        Path(vcpkg_root)
-        / "installed"
-        / "x64-windows"
-        / "bin"
-        / "speexdsp.dll"
-    )
-    if vcpkg_speex_dll.exists():
-        binaries.append((str(vcpkg_speex_dll), "."))
-
-
 a = Analysis(
     [str(ROOT / "run.py")],
     pathex=[str(ROOT)],
-    binaries=binaries,
+    binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],

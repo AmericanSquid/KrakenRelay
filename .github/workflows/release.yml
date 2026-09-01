@@ -13,6 +13,10 @@ on:
         description: Branch or commit containing the build configuration
         required: true
         default: main
+      target:
+        description: Build one target or all targets
+        required: false
+        default: all
 
 permissions:
   contents: write
@@ -20,6 +24,7 @@ permissions:
 jobs:
   build:
     name: ${{ matrix.asset }}
+    if: ${{ github.event_name == 'release' || inputs.target == 'all' || inputs.target == matrix.asset }}
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -73,7 +78,6 @@ jobs:
           "LDFLAGS=-L$(Join-Path $installRoot 'lib')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "LIBRARY_PATH=$(Join-Path $installRoot 'lib')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "PATH=$(Join-Path $installRoot 'bin');$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Copy-Item (Join-Path $installRoot 'bin/speexdsp.dll') -Destination . -Force
 
       - name: Install Python dependencies
         shell: bash
