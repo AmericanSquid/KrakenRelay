@@ -8,6 +8,7 @@ from dsp.python_chain import PythonDSPChain
 from plugins.manager import PluginManager
 from ptt import PTTManager
 from tones import RequestID, ScheduleID, ToneGenerator, TonePlayer, TOTManager
+from tones.cw_playback import CWPlayback
 
 from .engine import AudioLoop, ProcessAudio
 from .lifecycle import Lifecycle
@@ -29,6 +30,7 @@ class Initialization:
         audio_manager,
         audit=None,
         publish_services=None,
+        ptt_manager_factory=None,
     ):
         cfg = config.config
         audio_cfg = cfg["audio"]
@@ -36,7 +38,11 @@ class Initialization:
         plugins = PluginManager(config)
         plugins.load_enabled()
 
-        ptt_manager = PTTManager(config)
+        ptt_manager = (
+            ptt_manager_factory(config)
+            if ptt_manager_factory is not None
+            else PTTManager(config)
+        )
         tot_manager = TOTManager(config, ptt_manager.safe_ptt_unkey)
         signal_gate = SignalGateState()
         tx_state = TxState(config)
@@ -73,7 +79,15 @@ class Initialization:
             output_device=output_device,
         )
         meter = Metering()
-        tx_audio = TxAudio(config, dsp_tx, meter, audio_io.send_pcm, audit=audit)
+        cw_playback = CWPlayback(state, config)
+        tx_audio = TxAudio(
+            config,
+            dsp_tx,
+            meter,
+            audio_io.send_pcm,
+            audit=audit,
+            cw_playback=cw_playback,
+        )
 
         control_ref = {}
 
@@ -86,12 +100,14 @@ class Initialization:
         request_cw = RequestID(
             config,
             start_transmission=start_transmission,
-            set_cw_generator=lambda generator: setattr(state, "cw_gen", generator),
+            set_cw_generator=cw_playback.start,
+            is_transmitting=lambda: tx_state.transmitting,
         )
         schedule_id = ScheduleID(
             config=config,
             start_cw_id=request_cw.start_cw_id,
             is_transmitting=lambda: tx_state.transmitting,
+            is_cw_active=lambda: state.cw_gen is not None,
         )
         tone_player = TonePlayer(
             config=config,
@@ -158,6 +174,7 @@ class Initialization:
             tot_manager,
             plugins=plugins,
             audit=audit,
+            cw_playback=cw_playback,
         )
         lifecycle = Lifecycle(
             state,
@@ -185,6 +202,8 @@ class Initialization:
                 signal_gate=signal_gate,
                 tx_state=tx_state,
                 streams=streams,
+                tx_control=tx_control,
+                tx_pipeline=tx_pipeline,
                 meter=meter,
                 request_cw=request_cw,
                 schedule_id=schedule_id,

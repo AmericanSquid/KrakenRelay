@@ -13,3 +13,8 @@ def is_squelch_open_edge(squelch_open_now: bool, was_open: bool) -> bool:
 
 def is_squelch_close_edge(squelch_open_now: bool, was_open: bool) -> bool:
     return not squelch_open_now and was_open
+
+
+def tail_expired(now, last_audio_time, tail_time) -> bool:
+    """Return whether the configured TX tail has elapsed."""
+    return float(now) - float(last_audio_time) > float(tail_time)

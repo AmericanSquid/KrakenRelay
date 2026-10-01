@@ -483,14 +483,21 @@
       </article>
 
       <!-- IDENTIFICATION -->
-      <article class="section searchable-section" id="identification" data-search="identification cw callsign interval speed pitch volume morse code">
+      <article class="section searchable-section" id="identification" data-search="identification cw callsign interval speed pitch volume mix ratio attenuation speech morse code">
         <h2>Identification</h2>
 
-        <h3>Callsign, Interval, CW Enable, Speed, Pitch, Volume</h3>
+        <h3>Callsign, Interval, CW Enable, Speed, Pitch, Volume, and Mix</h3>
         <p>
           These settings control the station identification function.
           The operator can set the station callsign, the interval between IDs, whether CW ID is enabled,
           and the speed, pitch, and volume used for Morse code transmission.
+        </p>
+        <p>
+          CW volume sets the normal ID level. During live speech, the blend control sets a fixed percentage
+          of that CW amplitude to add to the voice. CW reduction applies an additional fixed attenuation
+          in dB. Voice loudness does not change the CW gain; the voice is mixed at its existing level.
+          CW transitions smoothly between its mixed and standalone levels. If the combined signal would
+          overload the output, peak protection temporarily reduces the combined level to prevent clipping.
         </p>
         <p>
           CW identification should be configured to match the station’s regulatory requirements and operating practice.

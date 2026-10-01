@@ -22,6 +22,7 @@ class AudioLoop:
         tot_manager,
         plugins=None,
         audit=None,
+        cw_playback=None,
     ):
         self.config = config
         self.state = state
@@ -35,52 +36,28 @@ class AudioLoop:
         self.tot_manager = tot_manager
         self.plugins = plugins
         self.audit = audit
+        self.cw_playback = cw_playback
 
     def _handle_cw_playback(self):
-        cfg = self.config.config
-        audio_cfg = cfg["audio"]
-        chunk_size = audio_cfg["chunk_size"]
-        tx = self.tx_state
-
-        cw_gen = self.state.cw_gen
-        if cw_gen is None:
+        playback = self.cw_playback
+        if playback is None or self.state.cw_gen is None:
+            return False
+        if playback.voice_emitted:
+            return False
+        if not self.tx_state.transmitting:
+            playback.clear()
             return False
 
-        sr = int(audio_cfg["sample_rate"])
-        frame_sec = float(chunk_size) / float(sr)
-
-        now_m = time.monotonic()
-        next_t = self.state.cw_next_t
-        if next_t is None:
-            next_t = now_m
-
-        if now_m < next_t:
-            time.sleep(next_t - now_m)
+        chunk = playback.take()
+        if chunk is None:
+            self.tx_state.skip_courtesy_tone = True
+            self.stop_transmission()
         else:
-            # Do not burst queued chunks to make up for a late audio loop. In
-            # particular, a catch-up burst can leave the final CW frame queued
-            # when the transmitter is unkeyed.
-            next_t = now_m
-
-        try:
-            chunk = next(cw_gen)
             self.send_pcm(chunk)
-            # KR_PLUGIN_CW_TICK_START
-            if self.plugins is not None:
-                self.plugins.emit_tick()
-            # KR_PLUGIN_CW_TICK_END
-            self.state.cw_next_t = next_t + frame_sec
-        except StopIteration:
-            self.state.cw_gen = None
-            self.state.cw_next_t = None
-            tx.skip_courtesy_tone = True
-            if getattr(tx, "transmitting", False):
-                self.stop_transmission()
-
         return True
 
     def _handle_audio_error(self, e, consecutive_errors, max_backoff):
-        logging.error(f"Error in audio loop: {e}")
+        logging.exception("Error in audio loop iteration: %s", e)
 
         if not self.state.running:
             return consecutive_errors, True
@@ -92,7 +69,7 @@ class AudioLoop:
 
     def _handle_normal_audio(self, manual_id_event):
         try:
-            self.process_audio.process_audio()
+            read_ok = self.process_audio.process_audio()
 
         except AudioStreamFailure as e:
             logging.exception("[AudioHealth] RX stream unhealthy; restarting repeater")
@@ -119,6 +96,7 @@ class AudioLoop:
                 logging.exception("[Repeater] Manual ID failed.")
 
         self.schedule_id.check_and_send()
+        return read_ok
 
     def _shutdown_cleanup(self):
         shutdown_transmitter(
@@ -140,10 +118,11 @@ class AudioLoop:
         while self.state.running:
             try:
                 self.tot_manager.check_lockout_expired()
-                if self._handle_cw_playback():
-                    continue
-
-                self._handle_normal_audio(manual_id_event)
+                if self.cw_playback is not None:
+                    self.cw_playback.begin_iteration()
+                read_ok = self._handle_normal_audio(manual_id_event)
+                if read_ok is not False:
+                    self._handle_cw_playback()
 
                 # KR_PLUGIN_TICK_START
                 if self.plugins is not None:

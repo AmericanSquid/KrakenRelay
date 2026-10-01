@@ -320,6 +320,24 @@
                         <div class="metaLine">Current: <span id="cw-vol-value">{{ ident.get('cw_volume', 50) }}</span></div>
                       </div>
                     </div>
+
+                    <div class="row">
+                      <div class="field">
+                        <label for="cw-mix-ratio">CW Blend During Speech (%)</label>
+                        <input type="range" id="cw-mix-ratio" data-key="identification.cw_mix_ratio" min="0" max="100" step="1"
+                               aria-describedby="cw-mix-ratio-help"
+                               value="{{ ident.get('cw_mix_ratio', 50) }}">
+                        <div class="metaLine" id="cw-mix-ratio-help">Normal CW amplitude blended in: <span id="cw-mix-ratio-value">{{ ident.get('cw_mix_ratio', 50) }}%</span></div>
+                      </div>
+
+                      <div class="field">
+                        <label for="cw-mix-attenuation">CW Reduction During Speech (dB)</label>
+                        <input type="range" id="cw-mix-attenuation" data-key="identification.cw_mix_attenuation_db" min="0" max="30" step="1"
+                               aria-describedby="cw-mix-attenuation-help"
+                               value="{{ ident.get('cw_mix_attenuation_db', 6) }}">
+                        <div class="metaLine" id="cw-mix-attenuation-help">Additional CW reduction: <span id="cw-mix-attenuation-value">{{ ident.get('cw_mix_attenuation_db', 6) }} dB</span></div>
+                      </div>
+                    </div>
                   </div>
 
                   <div class="subtab-panel" id="repeater-timing" data-tab-group="repeater" data-tab-panel hidden>

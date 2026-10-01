@@ -55,6 +55,8 @@ DEFAULT_CONFIG = {
         "cw_pitch": 523,
         "cw_wpm": 20,
         "cw_volume": 100,
+        "cw_mix_ratio": 50,
+        "cw_mix_attenuation_db": 6,
     },
     "tot": {
         "tot_enabled": True,

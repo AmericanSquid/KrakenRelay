@@ -43,6 +43,8 @@ identification:
   cw_pitch: 900
   cw_volume: 20
   cw_wpm: 20
+  cw_mix_ratio: 50
+  cw_mix_attenuation_db: 6
   interval_minutes: 10
 ptt:
   device_path: FAKE

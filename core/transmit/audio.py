@@ -7,15 +7,19 @@ from runtime.audit import AuditEvent
 
 
 class TxAudio:
-    def __init__(self, config, dsp_tx, meter, send_pcm, audit=None):
+    def __init__(self, config, dsp_tx, meter, send_pcm, audit=None, cw_playback=None):
         self.config = config
         self.dsp_tx = dsp_tx
         self.meter = meter
         self.send_pcm = send_pcm
         self.audit = audit
+        self.cw_playback = cw_playback
 
     def send_chunk(
-        self, samples: np.ndarray, link_samples: np.ndarray | None = None
+        self,
+        samples: np.ndarray,
+        link_samples: np.ndarray | None = None,
+        overlay_cw: bool = False,
     ) -> None:
         cfg = self.config.config
         audio_cfg = cfg["audio"]
@@ -28,6 +32,9 @@ class TxAudio:
             or audio_cfg.get("tx_tone_eq_enabled", False)
         ):
             samples = self.dsp_tx.process_int16_to_int16(samples)
+
+        if overlay_cw and self.cw_playback is not None:
+            samples = self.cw_playback.mix_voice(samples)
 
         self.meter.update(samples, "tx")
         check_clipping(samples)

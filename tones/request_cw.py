@@ -6,10 +6,11 @@ from .tone_vol import _tone_vol
 
 
 class RequestID:
-    def __init__(self, config, start_transmission, set_cw_generator):
+    def __init__(self, config, start_transmission, set_cw_generator, is_transmitting):
         self.config = config
         self.start_transmission = start_transmission
         self.set_cw_generator = set_cw_generator
+        self.is_transmitting = is_transmitting
 
         self.manual_id_event = threading.Event()
         self.manual_id_last = 0.0
@@ -46,4 +47,5 @@ class RequestID:
         )
 
         self.set_cw_generator(morse.generate_chunks(callsign, chunk_size))
-        self.start_transmission()
+        if not self.is_transmitting():
+            self.start_transmission()

@@ -14,6 +14,7 @@ from ..primitives import (
     is_squelch_close_edge,
     is_squelch_open_edge,
     reset_carrier_probe,
+    tail_expired,
 )
 from ..signal_gate import carrier_validity_probe, update_squelch_state
 
@@ -163,9 +164,6 @@ class ProcessAudio:
         chunk_size = int(audio_cfg["chunk_size"])
         debug_on = debug_enabled()
 
-        def tail_expired(now, tx, repeater_cfg):
-            return now - tx.last_audio_time > repeater_cfg["tail_time"]
-
         try:
             primary_raw, secondary_raw = self._read_rx_sources(chunk_size)
             self.audio_health.record_success()
@@ -173,7 +171,7 @@ class ProcessAudio:
         except Exception as e:
             # If we're shutting down, just exit quietly.
             if not self.state.running:
-                return
+                return False
 
             error_text = repr(e)
 
@@ -200,7 +198,7 @@ class ProcessAudio:
                 )
 
             self.audio_health.record_failure(e)
-            return
+            return False
 
         raw_samples = self._mix_rx_sources(primary_raw, secondary_raw)
 
@@ -263,7 +261,7 @@ class ProcessAudio:
                     )
 
         elif is_squelch_close_edge(squelch_open_now, prev_open):
-            if not tx.transmitting and gate.kerchunk_buffer:
+            if gate.kerchunk_buffer:
                 logging.info("[Anti-Kerchunk] Suppressed short key-up.")
                 gate.kerchunk_buffer = []
 
@@ -308,8 +306,8 @@ class ProcessAudio:
             self.rx_fade_in.reset()
             self.state.current_rms = 0.0
 
-            if tx.transmitting:
-                if tail_expired(now, tx, repeater_cfg):
+            if tx.transmitting and self.state.cw_gen is None:
+                if tail_expired(now, tx.last_audio_time, repeater_cfg["tail_time"]):
                     logging.info(
                         "Silence persists beyond tail time. Stopping transmission."
                     )
@@ -319,3 +317,5 @@ class ProcessAudio:
                     # In Output 2 link mode this intentionally does not go to the node
                     # because no link_samples/link_pcm is supplied.
                     self.send_pcm(tx.silence_chunk)
+
+        return True

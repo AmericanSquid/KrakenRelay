@@ -95,11 +95,14 @@ class Pipeline:
             self.stop_transmission()
             return
 
-        if not tx.transmitting:
+        # A CW ID may key TX while speech is still in anti-kerchunk holdoff.
+        # Keep honoring that holdoff and flush its buffer when it passes.
+        if not tx.transmitting or gate.kerchunk_buffer:
             if self._handle_anti_kerchunk(gate, repeater_cfg, debug_on, now, samples):
                 return
 
-            self.start_transmission()
+            if not tx.transmitting:
+                self.start_transmission()
 
             if gate.kerchunk_buffer:
                 if debug_on:
@@ -108,9 +111,9 @@ class Pipeline:
                         len(gate.kerchunk_buffer),
                     )
                 for chunk in gate.kerchunk_buffer:
-                    send_chunk(chunk)
+                    send_chunk(chunk, overlay_cw=True)
                 gate.kerchunk_buffer = []
 
-        send_chunk(samples, link_samples=link_samples)
+        send_chunk(samples, link_samples=link_samples, overlay_cw=True)
 
         tx.last_audio_time = now

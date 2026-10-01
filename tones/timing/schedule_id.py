@@ -8,10 +8,12 @@ class ScheduleID:
         config,
         start_cw_id,
         is_transmitting,
+        is_cw_active,
     ):
         self.config = config
         self.start_cw_id = start_cw_id
         self.is_transmitting = is_transmitting
+        self.is_cw_active = is_cw_active
         self.last_id_time = time.time()
         self.post_tx = False
         self.sending_id = False
@@ -29,22 +31,23 @@ class ScheduleID:
 
         now = time.time()
 
-        # === Idle & Post-TX CW ID === #
-        if self.is_transmitting():
+        if self.is_cw_active():
             return
 
         if id_cfg["cw_enabled"]:
-            interval = id_cfg["interval_minutes"] * 60
+            interval = float(id_cfg.get("interval_minutes", 10)) * 60.0
             should_id = now - self.last_id_time > interval
 
-            if should_id and (self.post_tx or not self.sending_id):
-                if now - self.last_stop_time > self.cooldown:
-                    if self.post_tx:
+            if should_id and not self.sending_id:
+                if self.is_transmitting() or now - self.last_stop_time > self.cooldown:
+                    if self.post_tx and not self.is_transmitting():
                         logging.info("Sending CW ID after user transmission.")
-                        self.post_tx = False
+                    elif self.is_transmitting():
+                        logging.info("Sending CW ID under user audio.")
                     else:
                         logging.info("Sending CW ID while idle.")
 
+                    self.post_tx = False
                     self.send_id()
 
     def send_id(self):
@@ -57,8 +60,8 @@ class ScheduleID:
             logging.error("Manual ID requested but CW is disabled.")
             return
 
-        if self.is_transmitting() or self.sending_id:
-            logging.warning("Unable to Send ID: already transmitting")
+        if self.is_cw_active() or self.sending_id:
+            logging.warning("Unable to Send ID: CW ID already in progress")
             return
 
         self.sending_id = True

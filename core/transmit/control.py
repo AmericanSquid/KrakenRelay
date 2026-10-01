@@ -34,7 +34,7 @@ class Control:
         self.state.current_rms = 0.0
 
     def _handle_vox_delay(self, repeater_cfg):
-        if self.ptt_manager.ptt_mode == "CM108":
+        if self.ptt_manager.ptt_mode != "VOX":
             return
 
         delay_sec = float(repeater_cfg.get("carrier_delay", 0) or 0)

@@ -140,6 +140,8 @@ bindTextReadout('highpass-cutoff', 'highpass-value', value => `${value} Hz`);
 bindTextReadout('limiter-threshold', 'limiter-value', value => Number(value).toFixed(3));
 bindTextReadout('courtesy-vol', 'courtesy-vol-value', value => value);
 bindTextReadout('cw-vol', 'cw-vol-value', value => value);
+bindTextReadout('cw-mix-ratio', 'cw-mix-ratio-value', value => `${value}%`);
+bindTextReadout('cw-mix-attenuation', 'cw-mix-attenuation-value', value => `${value} dB`);
 bindTextReadout('tot-vol', 'tot-vol-value', value => value);
 bindTextReadout('compressor-strength', 'compressor-strength-value', value => `${value}%`);
 bindTextReadout('speex-suppression', 'speex-suppression-value', value => `${value} dB`);
@@ -654,7 +656,7 @@ function syncConditionalDisables(){
     courtesyVolEl.disabled = locked || !courtesyToneEl.checked;
   }
 
-  ["cw-speed","cw-pitch","cw-vol"].forEach(id => {
+  ["cw-speed","cw-pitch","cw-vol","cw-mix-ratio","cw-mix-attenuation"].forEach(id => {
     const el = document.getElementById(id);
     if (el && cwEnabledEl){
       el.disabled = locked || !cwEnabledEl.checked;

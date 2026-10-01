@@ -1,0 +1,130 @@
+Metadata-Version: 2.4
+Name: speexdsp-ns-vulcanlabs
+Version: 0.1.3
+Summary: Python bindings of speexdsp noise suppression library (Vulcanlabs fork with multi-platform wheels)
+Home-page: https://github.com/hiendang7613vulcan/speexdsp-ns-vulcanlabs
+Author: Lucky Wong, Vulcanlabs
+Author-email: Lucky Wong <luckyvictor1983@gmail.com>, Vulcanlabs <dev@vulcanlabs.co>
+Maintainer-email: Vulcanlabs <dev@vulcanlabs.co>
+License: BSD-3-Clause
+Project-URL: Homepage, https://github.com/hiendang7613vulcan/speexdsp-ns-vulcanlabs
+Project-URL: Repository, https://github.com/hiendang7613vulcan/speexdsp-ns-vulcanlabs
+Project-URL: Original Source, https://github.com/TeaPoly/speexdsp-ns-python
+Keywords: speexdsp,noise suppression,audio processing,speech enhancement
+Platform: Linux
+Platform: MacOS
+Classifier: Development Status :: 4 - Beta
+Classifier: License :: OSI Approved :: BSD License
+Classifier: Operating System :: POSIX :: Linux
+Classifier: Operating System :: MacOS
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: C++
+Classifier: Topic :: Multimedia :: Sound/Audio :: Speech
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Dynamic: author
+Dynamic: home-page
+Dynamic: license-file
+Dynamic: platform
+
+# speexdsp-ns-vulcanlabs
+
+Python bindings for SpeexDSP noise suppression library with **pre-built wheels** for multiple platforms.
+
+This is a fork of [TeaPoly/speexdsp-ns-python](https://github.com/TeaPoly/speexdsp-ns-python) with added support for:
+- ✅ Linux x86_64
+- ✅ Linux ARM64 (aarch64)
+- ✅ macOS x86_64 (Intel)
+- ✅ macOS ARM64 (Apple Silicon M1/M2/M3)
+- ✅ Python 3.8 - 3.12
+
+## Installation
+
+```bash
+pip install speexdsp-ns-vulcanlabs
+```
+
+## Usage
+
+```python
+from speexdsp_ns import NoiseSuppression
+
+# Create noise suppression instance
+# frame_size: number of samples per frame (e.g., 256)
+# sample_rate: audio sample rate in Hz (e.g., 16000)
+ns = NoiseSuppression.create(frame_size=256, sample_rate=16000)
+
+# Process audio frame (must be bytes of int16 samples)
+# Input: raw PCM audio bytes (frame_size * 2 bytes for int16)
+# Output: noise-suppressed audio bytes
+processed_audio = ns.process(raw_audio_bytes)
+```
+
+### Example: Process WAV file
+
+```python
+import wave
+from speexdsp_ns import NoiseSuppression
+
+frame_size = 256
+
+# Open input file
+with wave.open('input.wav', 'rb') as infile:
+    sample_rate = infile.getframerate()
+    
+    # Create noise suppression
+    ns = NoiseSuppression.create(frame_size, sample_rate)
+    
+    # Open output file
+    with wave.open('output.wav', 'wb') as outfile:
+        outfile.setnchannels(1)
+        outfile.setsampwidth(2)  # 16-bit
+        outfile.setframerate(sample_rate)
+        
+        while True:
+            data = infile.readframes(frame_size)
+            if len(data) != frame_size * 2:
+                break
+            
+            # Process frame
+            processed = ns.process(data)
+            outfile.writeframes(processed)
+```
+
+## Requirements
+
+- Python 3.8+
+- No additional system dependencies required (pre-built wheels include speexdsp)
+
+## Building from source
+
+If you need to build from source:
+
+```bash
+# Linux (Ubuntu/Debian)
+sudo apt-get install libspeexdsp-dev swig
+pip install .
+
+# macOS
+brew install speexdsp swig
+export LDFLAGS="-L$(brew --prefix speexdsp)/lib"
+export CPPFLAGS="-I$(brew --prefix speexdsp)/include"
+pip install .
+```
+
+## License
+
+BSD-3-Clause License (same as original speexdsp-ns-python)
+
+## Credits
+
+- Original implementation: [TeaPoly/speexdsp-ns-python](https://github.com/TeaPoly/speexdsp-ns-python)
+- SpeexDSP library: [xiph/speexdsp](https://github.com/xiph/speexdsp)
+- Multi-platform wheels: [Vulcanlabs](https://github.com/hiendang7613vulcan/speexdsp-ns-vulcanlabs)
