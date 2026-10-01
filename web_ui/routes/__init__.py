@@ -35,4 +35,5 @@ ALL_BLUEPRINTS = [
     # KR_PLUGIN_ROUTES_LIST_START
     plugin_bp,
     # KR_PLUGIN_ROUTES_LIST_END
+
 ]

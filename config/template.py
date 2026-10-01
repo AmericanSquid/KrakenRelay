@@ -36,6 +36,8 @@ DEFAULT_CONFIG = {
         "output_2_mode": "simulcast",
         "output_device_2_info": {"id": "", "name": ""},
         "notch_enabled": False,
+        "notch_mode": "harmonics",
+        "notch_frequencies_hz": [],
         "notch_frequency_hz": 60.0,
         "notch_q": 30.0,
         "notch_harmonics": 1,

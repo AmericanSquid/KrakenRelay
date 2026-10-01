@@ -1,6 +1,10 @@
 import logging
 
-from config.primitives import compressor_settings
+from config.primitives import (
+    compressor_settings,
+    parsed_notch_frequencies,
+    resolve_notch_mode,
+)
 
 
 def configure_dsp(config, dsp_rx, dsp_tx):
@@ -14,22 +18,9 @@ def configure_dsp(config, dsp_rx, dsp_tx):
     notch_freq = float(a.get("notch_frequency_hz", 60.0))
     notch_q = float(a.get("notch_q", 30.0))
     notch_harmonics = int(a.get("notch_harmonics", 1))
-    notch_frequencies = a.get("notch_frequencies_hz", [])
+    notch_mode = resolve_notch_mode(a)
+    notch_frequencies = parsed_notch_frequencies(a.get("notch_frequencies_hz", []))
     notch_apply_to_tx = bool(a.get("notch_apply_to_tx", True))
-
-    if not isinstance(notch_frequencies, (list, tuple)):
-        notch_frequencies = []
-
-    parsed_frequencies = []
-    for value in notch_frequencies:
-        try:
-            freq = float(value)
-        except (TypeError, ValueError):
-            logging.warning("Ignoring invalid notch frequency: %r", value)
-            continue
-        if freq > 0.0 and freq not in parsed_frequencies:
-            parsed_frequencies.append(freq)
-    notch_frequencies = parsed_frequencies[:8]
 
     tx_tone_enabled = bool(a.get("tx_tone_eq_enabled", True))
     tx_tone = float(a.get("tx_tone", 0.0))
@@ -43,7 +34,7 @@ def configure_dsp(config, dsp_rx, dsp_tx):
     compressor_enabled = bool(a.get("compressor_enabled", False))
     compressor_strength = float(a.get("compressor_strength", 50))
 
-    if notch_frequencies:
+    if notch_mode == "frequencies":
         logging.info(
             "Notch config: enabled=%s frequencies=%s q=%s apply_to_tx=%s",
             notch_enabled,
@@ -63,9 +54,9 @@ def configure_dsp(config, dsp_rx, dsp_tx):
     logging.info("TX tone config: enabled=%s tone=%.3f", tx_tone_enabled, tx_tone)
 
     def apply_notch(dsp, enabled):
-        if notch_frequencies:
+        if notch_mode == "frequencies":
             dsp.configure_notch_frequencies(
-                enabled=enabled,
+                enabled=enabled and bool(notch_frequencies),
                 freqs_hz=notch_frequencies,
                 q=notch_q,
                 sample_rate=sr,

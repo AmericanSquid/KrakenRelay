@@ -457,6 +457,19 @@
       margin-top: 8px;
     }
 
+    #notch-frequencies-empty[hidden],
+    #notch-frequencies-error[hidden]{
+      display: none;
+    }
+
+    #notch-frequencies-error{
+      color: var(--bad);
+    }
+
+    #notch-frequencies:invalid{
+      border-color: var(--bad);
+    }
+
     .toggle{
       display:flex;
       align-items:center;
@@ -1179,4 +1192,3 @@
   }
 }
 /* KR_PLUGIN_RECORDING_CSS_END */
-

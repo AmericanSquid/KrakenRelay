@@ -113,8 +113,7 @@ class WebRuntimeSmokeTests(unittest.TestCase):
             config = _package("config")
             common = ModuleType("config.common")
             common.sync_primary_ptt_legacy_keys = lambda _cfg: None
-            primitives = ModuleType("config.primitives")
-            primitives.compressor_settings = lambda _strength: (-20.0, 3.0, 3.75)
+            primitives = _load_module("config.primitives", "config/primitives.py")
             config.common = common
             config.primitives = primitives
             sys.modules["config"] = config

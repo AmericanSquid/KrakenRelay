@@ -20,6 +20,8 @@ audio:
   limiter_enabled: true
   limiter_threshold: 0.85
   notch_enabled: true
+  notch_mode: harmonics
+  notch_frequencies_hz: []
   notch_frequency_hz: 60.0
   notch_harmonics: 2
   notch_q: 30.0

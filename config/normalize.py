@@ -1,7 +1,7 @@
 import copy
 
 from .manager import ConfigManager
-from .primitives import compressor_settings
+from .primitives import compressor_settings, resolve_notch_mode
 from .template import DEFAULT_CONFIG
 
 
@@ -42,6 +42,10 @@ def _normalize_legacy_compressor(audio_cfg: dict) -> None:
 def normalize_config_for_template(cfg: dict) -> None:
     if not isinstance(cfg, dict):
         return
+    audio_cfg = cfg.get("audio", {})
+    if isinstance(audio_cfg, dict):
+        # Infer the legacy mode before merging the new default mode.
+        audio_cfg["notch_mode"] = resolve_notch_mode(audio_cfg)
     _merge_defaults(cfg, DEFAULT_CONFIG)
 
     ptt = cfg.setdefault("ptt", {})

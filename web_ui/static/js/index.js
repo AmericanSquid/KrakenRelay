@@ -580,6 +580,8 @@ const limiterEnabledEl = document.getElementById("limiter-enabled");
 const limiterThresholdEl = document.getElementById("limiter-threshold");
 const compressorEnabledEl = document.getElementById("compressor-enabled");
 const notchEnabledEl = document.getElementById("notch-enabled");
+const notchModeEl = document.getElementById("notch-mode");
+const notchFrequenciesEl = document.getElementById("notch-frequencies");
 const notchFrequencyEl = document.getElementById("notch-frequency");
 const notchQEl = document.getElementById("notch-q");
 const notchHarmonicsEl = document.getElementById("notch-harmonics");
@@ -681,9 +683,14 @@ function syncConditionalDisables(){
   }
 
   if (notchEnabledEl){
-    if (notchFrequencyEl) notchFrequencyEl.disabled = locked || !notchEnabledEl.checked;
+    const individualMode = notchModeEl?.value === "frequencies";
+    if (notchModeEl) notchModeEl.disabled = locked || !notchEnabledEl.checked;
+    if (notchFrequencyEl) notchFrequencyEl.disabled = locked || !notchEnabledEl.checked || individualMode;
+    if (notchFrequenciesEl) notchFrequenciesEl.disabled = locked || !notchEnabledEl.checked || !individualMode;
     if (notchQEl) notchQEl.disabled = locked || !notchEnabledEl.checked || !advancedVisible;
-    if (notchHarmonicsEl) notchHarmonicsEl.disabled = locked || !notchEnabledEl.checked || !advancedVisible;
+    if (notchHarmonicsEl) notchHarmonicsEl.disabled = locked || !notchEnabledEl.checked || !advancedVisible || individualMode;
+    const emptyHint = document.getElementById("notch-frequencies-empty");
+    if (emptyHint) emptyHint.hidden = !individualMode || !!notchFrequenciesEl?.value.trim();
   }
 
   if (speexEnabledEl){
@@ -780,9 +787,36 @@ lockEl.addEventListener('change', () => {
 });
 
 const debounceTimers = new Map();
+// Save edits even when switching modes disables their controls before debounce fires.
+const dirtyNotchKeys = new Set();
+
+function parseNotchFrequencies(el){
+  const errorEl = document.getElementById("notch-frequencies-error");
+  let frequencies = [];
+  let error = "";
+  if (el.value.trim()) {
+    const parts = el.value.split(",").map(part => part.trim());
+    const maximum = 0.49 * Number(document.getElementById("sample-rate")?.value || 48000);
+    const numbers = parts.map(Number);
+    if (parts.some(part => !part) || numbers.some(freq => !Number.isFinite(freq) || freq < 5 || freq > maximum)) {
+      error = `Enter frequencies between 5 and ${maximum} Hz, separated by commas.`;
+    } else {
+      frequencies = [...new Set(numbers)];
+      if (frequencies.length > 8) error = "Use at most eight distinct notch frequencies.";
+    }
+  }
+  el.setCustomValidity(error);
+  if (errorEl) {
+    errorEl.textContent = error;
+    errorEl.hidden = !error;
+  }
+  if (error) throw new Error(error);
+  return frequencies;
+}
 
 function valueForConfigElement(el){
   if (el.type === "checkbox") return el.checked;
+  if (el.dataset.key === "audio.notch_frequencies_hz") return parseNotchFrequencies(el);
   return el.value;
 }
 
@@ -796,9 +830,8 @@ async function sendLiveUpdate(el){
     return { skipped: true, reason: "missing-key" };
   }
 
-  const value = valueForConfigElement(el);
-
   try {
+    const value = valueForConfigElement(el);
     const resp = await postJSON(apiUrl("config/live"), { key, value });
 
     if (resp && resp.status === "restart_required"){
@@ -843,7 +876,12 @@ async function flushPendingConfigUpdates(){
   }
 
   const elements = Array.from(document.querySelectorAll("[data-key]"))
-    .filter(el => !el.disabled);
+    .filter(el => !el.disabled || dirtyNotchKeys.has(el.dataset.key))
+    // The server validates frequencies against the configured sample rate.
+    .sort((a, b) => Number(b.dataset.key === "audio.sample_rate") - Number(a.dataset.key === "audio.sample_rate"));
+
+  // Validate the frequency list before sending any of the Save updates.
+  elements.forEach(valueForConfigElement);
 
   for (const el of elements) {
     await sendLiveUpdate(el);
@@ -853,6 +891,7 @@ async function flushPendingConfigUpdates(){
 document.querySelectorAll("[data-key]").forEach(el => {
   const handler = () => {
     if (lockEl.checked) return;
+    if (el.dataset.key.startsWith("audio.notch_")) dirtyNotchKeys.add(el.dataset.key);
     scheduleUpdate(el);
     syncConditionalDisables();
   };
@@ -884,6 +923,7 @@ saveBtn.addEventListener("click", async () => {
     const data = await res.json().catch(() => ({}));
 
     if (res.ok && data && data.status === "ok") {
+      dirtyNotchKeys.clear();
       setSavePill("Saved ✅", "ok");
 
       if (restartBadge) {
@@ -1243,4 +1283,3 @@ setInterval(() => {
   recordDuration.textContent = formatRecordingDuration(recordingState.elapsed_seconds);
 }, 1000);
 // KR_PLUGIN_RECORDING_JS_END
-

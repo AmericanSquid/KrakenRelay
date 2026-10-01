@@ -48,6 +48,9 @@ audio:
   dual_output: false
   output_2_mode: simulcast
   notch_enabled: false
+  # harmonics uses the base frequency/count; frequencies uses the explicit list.
+  # Switching modes preserves both sets of settings.
+  notch_mode: harmonics
   notch_frequency_hz: 60.0
   notch_q: 30.0
   notch_harmonics: 1

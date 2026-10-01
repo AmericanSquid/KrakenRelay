@@ -54,6 +54,10 @@ class AudioLoop:
             self.stop_transmission()
         else:
             self.send_pcm(chunk)
+            # KR_PLUGIN_CW_TICK_START
+            if self.plugins is not None:
+                self.plugins.emit_tick()
+            # KR_PLUGIN_CW_TICK_END
         return True
 
     def _handle_audio_error(self, e, consecutive_errors, max_backoff):

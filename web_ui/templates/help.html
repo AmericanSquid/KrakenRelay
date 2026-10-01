@@ -388,9 +388,13 @@
           other constant tones that may be present in the receive audio.
         </p>
         <p>
-          Like compression, notch filter settings are configured through
-          <code>config.yaml</code> and are not currently adjustable through the
-          web interface.
+          In DSP settings, enable the notch filter and choose a mode.
+          <strong>Harmonics</strong> uses a base frequency and a harmonic count
+          (available with Advanced enabled). <strong>Individual frequencies</strong>
+          uses up to eight comma-separated frequencies. An empty individual list
+          applies no notch filtering. Q is shared between both modes and is
+          available in Advanced DSP. Switching modes preserves both sets of
+          settings. Click Save to apply changes to the running controller.
         </p>
 
         <h3>Squelch Threshold</h3>

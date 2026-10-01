@@ -497,9 +497,25 @@
                           <span>Enable</span>
                         </div>
 
+                        <label for="notch-mode" style="margin-top:10px;">Mode</label>
+                        <select id="notch-mode" data-key="audio.notch_mode">
+                          {% set notch_mode = audio.get('notch_mode', 'frequencies' if audio.get('notch_frequencies_hz', []) else 'harmonics') %}
+                          <option value="harmonics" {% if notch_mode == 'harmonics' %}selected{% endif %}>Harmonics</option>
+                          <option value="frequencies" {% if notch_mode == 'frequencies' %}selected{% endif %}>Individual frequencies</option>
+                        </select>
+
                         <label for="notch-frequency" style="margin-top:10px;">Frequency (Hz)</label>
                         <input type="number" id="notch-frequency" data-key="audio.notch_frequency_hz" min="10" max="5000" step="0.1"
                                value="{{ audio.get('notch_frequency_hz', 60.0) }}">
+
+                        <label for="notch-frequencies" style="margin-top:10px;">Individual Frequencies (Hz)</label>
+                        <input type="text" id="notch-frequencies" data-key="audio.notch_frequencies_hz"
+                               aria-describedby="notch-frequencies-help notch-frequencies-empty notch-frequencies-error"
+                               placeholder="60, 120, 175"
+                               value="{{ audio.get('notch_frequencies_hz', []) | join(', ') }}">
+                        <div class="metaLine" id="notch-frequencies-help">Up to eight frequencies, separated by commas. Both modes retain their settings.</div>
+                        <div class="metaLine" id="notch-frequencies-empty" hidden>No frequencies configured; filtering is inactive in this mode.</div>
+                        <div class="metaLine" id="notch-frequencies-error" role="alert" hidden></div>
                       </div>
                     </div>
 

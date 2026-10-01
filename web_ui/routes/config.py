@@ -4,7 +4,7 @@ from flask import Blueprint, request
 import web_ui.app as state
 from audio.device_identity import descriptor_for_index, selectable_devices
 from config.common import sync_primary_ptt_legacy_keys
-from config.primitives import compressor_settings
+from config.primitives import compressor_settings, validate_notch_frequencies
 from runtime.audit import AuditEvent
 from web_ui.utils.config import _coerce, _config_path, _set_path
 
@@ -188,7 +188,19 @@ def config_live():
         if state.config_locked:
             return _locked()
 
-        coerced = _coerce(value)
+        try:
+            if key == "audio.notch_mode":
+                if value not in ("harmonics", "frequencies"):
+                    raise ValueError("Notch mode must be harmonics or frequencies")
+                coerced = value
+            elif key == "audio.notch_frequencies_hz":
+                coerced = validate_notch_frequencies(
+                    value, cfg.get("audio", {}).get("sample_rate", 48000)
+                )
+            else:
+                coerced = _coerce(value)
+        except (TypeError, ValueError, OverflowError) as exc:
+            return _error(str(exc), 400)
         _set_path(cfg, key, coerced)
         _apply_config_side_effects(cfg, key, coerced)
 
